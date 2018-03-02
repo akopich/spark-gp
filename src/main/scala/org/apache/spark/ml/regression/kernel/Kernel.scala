@@ -47,8 +47,7 @@ class RBFKernel(sigma: Double) extends Kernel {
   override def derivative(): Array[DBM[Double]] = {
     val sqd = squaredDistances.getOrElse(throw new TrainingVectorsNotInitializedException)
 
-    val derivative = (sqd *:* trainingKernel()) /
-      (getSigma() * getSigma() * getSigma())
+    val derivative = (sqd *:* trainingKernel()) / (getSigma() * getSigma() * getSigma())
 
     Array(derivative)
   }
