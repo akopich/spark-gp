@@ -2,7 +2,7 @@ package org.apache.spark.ml.regression
 
 import org.apache.spark.ml.PredictorParams
 import org.apache.spark.ml.linalg.Vector
-import org.apache.spark.ml.param.{Param, ParamMap}
+import org.apache.spark.ml.param.{IntParam, Param, ParamMap}
 import org.apache.spark.ml.param.shared._
 import org.apache.spark.ml.regression.kernel.{Kernel, RBFKernel}
 import org.apache.spark.ml.util.Identifiable
@@ -14,8 +14,18 @@ private[regression] trait GaussianProcessRegressionParams extends PredictorParam
   final val kernel = new Param[Kernel](this,
     "kernel", "the kernel of the prior Gaussian Process")
 
-  def setKernel(value: Kernel) : Unit = {
+  final val datasetSizeForExpert = new IntParam(this,
+    "datasetSizeForExpert", "the number of data points fed to each expert")
+
+  def setDatasetSizeForExpert(value: Int): this.type = {
+    set(datasetSizeForExpert, value)
+    this
+  }
+  setDefault(datasetSizeForExpert -> 100)
+
+  def setKernel(value: Kernel): this.type = {
     set(kernel, value)
+    this
   }
   setDefault(kernel -> new RBFKernel())
 }
