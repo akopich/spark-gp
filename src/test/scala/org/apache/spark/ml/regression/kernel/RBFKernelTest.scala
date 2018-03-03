@@ -20,7 +20,7 @@ class RBFKernelTest extends FunSuite {
     val rbf = new RBFKernel()
 
     assertThrows[TrainingVectorsNotInitializedException] {
-      rbf.derivative()
+      rbf.trainingKernelAndDerivative()
     }
   }
 
@@ -48,11 +48,12 @@ class RBFKernelTest extends FunSuite {
     (rbfRight.trainingKernel() - rbfLeft.trainingKernel()) / (2 * h)
   }
 
-  test("derivative") {
+  test("being called after `setTrainingVector`," +
+    " `derivative` should return the correct kernel matrix derivative") {
     val rbf = new RBFKernel(0.2)
     rbf.setTrainingVectors(dataset)
 
-    val analytical = rbf.derivative()(0)
+    val analytical = rbf.trainingKernelAndDerivative()._2(0)
     val computational = computationalDerivative(0.2, 1e-3)
 
     assert(all(abs(analytical - computational) <:< 1e-3))

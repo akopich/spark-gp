@@ -1,6 +1,6 @@
 package org.apache.spark.ml.regression.kernel
 
-import breeze.linalg.{DenseMatrix => DBM}
+import breeze.linalg.{DenseMatrix => BDM}
 import breeze.numerics._
 
 import org.apache.spark.ml.linalg.{Vector, Vectors}
@@ -9,11 +9,11 @@ import org.apache.spark.ml.linalg.{Vector, Vectors}
 trait Kernel {
   var hyperparameters: Vector
 
-  def setTrainingVectors(vectors: Array[Vector]): Unit
+  def setTrainingVectors(vectors: Array[Vector]): this.type
 
-  def trainingKernel(): DBM[Double]
+  def trainingKernel(): BDM[Double]
 
-  def derivative(): Array[DBM[Double]]
+  def trainingKernelAndDerivative(): (BDM[Double], Array[BDM[Double]])
 }
 
 class TrainingVectorsNotInitializedException
@@ -24,12 +24,12 @@ class RBFKernel(sigma: Double) extends Kernel {
 
   private def getSigma() = hyperparameters(0)
 
-  private var squaredDistances: Option[DBM[Double]] = None
+  private var squaredDistances: Option[BDM[Double]] = None
 
   def this() = this(1)
 
-  override def setTrainingVectors(vectors: Array[Vector]): Unit = {
-    val sqd = DBM.zeros[Double](vectors.length, vectors.length)
+  override def setTrainingVectors(vectors: Array[Vector]): this.type = {
+    val sqd = BDM.zeros[Double](vectors.length, vectors.length)
     for (i <- vectors.indices; j <- 0 to i) {
       val dist = Vectors.sqdist(vectors(i), vectors(j))
       sqd(i, j) = dist
@@ -37,18 +37,20 @@ class RBFKernel(sigma: Double) extends Kernel {
     }
 
     squaredDistances = Some(sqd)
+    this
   }
 
-  override def trainingKernel(): DBM[Double] = {
+  override def trainingKernel(): BDM[Double] = {
     exp(squaredDistances.getOrElse(throw new TrainingVectorsNotInitializedException)
       / (-2d * getSigma()*getSigma()))
   }
 
-  override def derivative(): Array[DBM[Double]] = {
+  override def trainingKernelAndDerivative(): (BDM[Double], Array[BDM[Double]]) = {
     val sqd = squaredDistances.getOrElse(throw new TrainingVectorsNotInitializedException)
 
-    val derivative = (sqd *:* trainingKernel()) / (getSigma() * getSigma() * getSigma())
+    val kernel = trainingKernel()
+    val derivative = (sqd *:* kernel) / (getSigma() * getSigma() * getSigma())
 
-    Array(derivative)
+    (kernel, Array(derivative))
   }
 }
