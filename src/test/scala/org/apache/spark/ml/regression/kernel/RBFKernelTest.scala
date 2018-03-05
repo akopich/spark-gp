@@ -58,4 +58,12 @@ class RBFKernelTest extends FunSuite {
 
     assert(all(abs(analytical - computational) <:< 1e-3))
   }
+
+  test("crossKernel returns correct kernel") {
+    val rbf = new RBFKernel(math.sqrt(0.2))
+    rbf.setTrainingVectors(dataset.drop(1))
+    val crossKernel = rbf.crossKernel(dataset.take(1))
+    val correctCrossKernel = DenseMatrix((6.737947e-03, 3.053624e-45))
+    assert(all(abs(crossKernel - correctCrossKernel) <:< 1e-4))
+  }
 }

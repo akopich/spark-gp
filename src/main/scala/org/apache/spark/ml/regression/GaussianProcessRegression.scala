@@ -79,7 +79,11 @@ class GaussianProcessRegression(override val uid: String)
     expertLabelsAndKernels.foreach { case(_, k) =>
       k.hyperparameters = Vectors.dense(optimalHyperparameters.toArray) }
 
-    new GaussianProcessRegressionModel(uid, expertLabelsAndKernels)
+    val expertKernelAndAlphas = expertLabelsAndKernels.map { case(y, kernel) =>
+      (kernel, inv(kernel.trainingKernel()) * y)
+    }.cache()
+
+    new GaussianProcessRegressionModel(uid, expertKernelAndAlphas)
   }
 
   private def likelihoodAndGradient(y: BDV[Double], kernel : Kernel) = {
@@ -87,8 +91,8 @@ class GaussianProcessRegression(override val uid: String)
     val Kinv = inv(k)
     val alpha = Kinv * y
     val firstTerm :BDV[Double] = 0.5 * y.t * Kinv * y
-    val likelihood = firstTerm(0) - 0.5 * logdet(Kinv)._2
-    val gradient = derivative.map(derivative => sum(-0.5 * (alpha * alpha.t - Kinv) *:* derivative))
+    val likelihood = firstTerm(0) + 0.5 * logdet(k)._2
+    val gradient = derivative.map(derivative => -0.5 * sum((alpha * alpha.t - Kinv) *:* derivative))
     (likelihood, BDV(gradient:_*))
   }
 
@@ -103,10 +107,16 @@ class GaussianProcessRegression(override val uid: String)
 }
 
 class GaussianProcessRegressionModel private[regression](override val uid: String,
-     private val  expertLabelsAndKernels: RDD[(DenseVector[Double], Kernel)])
+     private val  expertLabelsAndKernels: RDD[(Kernel, BDV[Double])])
   extends RegressionModel[Vector, GaussianProcessRegressionModel] {
 
-  override protected def predict(features: Vector): Double = ???
+  override def predict(features: Vector): Double = {
+    expertLabelsAndKernels.map { case(k, alpha) =>
+      val crossKernel = k.crossKernel(Array(features))
+      val res = crossKernel * alpha
+      res(0)
+    }.mean()
+  }
 
   override def copy(extra: ParamMap): GaussianProcessRegressionModel = ???
 }
