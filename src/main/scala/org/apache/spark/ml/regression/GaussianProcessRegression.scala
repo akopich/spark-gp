@@ -1,20 +1,18 @@
 package org.apache.spark.ml.regression
 
+import breeze.linalg.{inv, logdet, sum, DenseMatrix => BDM, DenseVector => BDV, _}
+import breeze.numerics._
+import breeze.optimize.{DiffFunction, LBFGSB}
 import org.apache.spark.ml.PredictorParams
 import org.apache.spark.ml.feature.LabeledPoint
 import org.apache.spark.ml.linalg.{Vector, Vectors}
-import org.apache.spark.ml.param.{DoubleParam, IntParam, Param, ParamMap}
 import org.apache.spark.ml.param.shared._
+import org.apache.spark.ml.param.{DoubleParam, IntParam, Param, ParamMap}
 import org.apache.spark.ml.regression.kernel.{Kernel, RBFKernel}
 import org.apache.spark.ml.util.Identifiable
 import org.apache.spark.rdd.RDD
-import org.apache.spark.sql.{Dataset, Row}
 import org.apache.spark.sql.functions.col
-import breeze.linalg.{inv, logdet, sum, DenseMatrix => BDM, DenseVector => BDV}
-import breeze.optimize.{DiffFunction, LBFGS, LBFGSB}
-import breeze.linalg._
-import breeze.numerics._
-import breeze.math._
+import org.apache.spark.sql.{Dataset, Row}
 
 private[regression] trait GaussianProcessRegressionParams extends PredictorParams
   with HasMaxIter with HasTol with HasStandardization with HasAggregationDepth with HasSeed {
@@ -58,6 +56,10 @@ private[regression] trait GaussianProcessRegressionParams extends PredictorParam
 class GaussianProcessRegression(override val uid: String)
   extends Regressor[Vector, GaussianProcessRegression, GaussianProcessRegressionModel]
     with GaussianProcessRegressionParams {
+
+  class NotPositiveDefiniteException extends Exception("Some matrix which is supposed to be " +
+    "positive definite is not. This probably happened due to `sigma2` parameter being too small." +
+    " Try to gradually increase it.")
 
   def this() = this(Identifiable.randomUID("gaussProcessReg"))
 
@@ -108,9 +110,16 @@ class GaussianProcessRegression(override val uid: String)
 
     val Kmm = regularizeMatrix(magicKernel.trainingKernel(), sigma2)
 
-    val magicVector = inv(sigma2 * Kmm + KmnKnm2Kmny._1) * KmnKnm2Kmny._2
+    val positiveDefiniteMatrix = sigma2 * Kmm + KmnKnm2Kmny._1
+    assertSymPositiveDefinite(positiveDefiniteMatrix)
+    val magicVector = inv(positiveDefiniteMatrix) * KmnKnm2Kmny._2
 
     new GaussianProcessRegressionModel(uid, magicVector, magicKernel)
+  }
+
+  private def assertSymPositiveDefinite(matrix: BDM[Double]) = {
+    if (any(eigSym(matrix).eigenvalues <:< 0d))
+      throw new NotPositiveDefiniteException
   }
 
   private def likelihoodAndGradient(y: BDV[Double], kernel : Kernel, sigma2: Double) = {
