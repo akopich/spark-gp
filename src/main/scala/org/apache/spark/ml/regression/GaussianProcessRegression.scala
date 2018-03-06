@@ -3,13 +3,14 @@ package org.apache.spark.ml.regression
 import breeze.linalg.{inv, logdet, sum, DenseMatrix => BDM, DenseVector => BDV, _}
 import breeze.numerics._
 import breeze.optimize.{DiffFunction, LBFGSB}
+import org.apache.spark.internal.Logging
 import org.apache.spark.ml.PredictorParams
 import org.apache.spark.ml.feature.LabeledPoint
 import org.apache.spark.ml.linalg.{Vector, Vectors}
 import org.apache.spark.ml.param.shared._
 import org.apache.spark.ml.param.{DoubleParam, IntParam, Param, ParamMap}
 import org.apache.spark.ml.regression.kernel.{Kernel, RBFKernel}
-import org.apache.spark.ml.util.Identifiable
+import org.apache.spark.ml.util.{Identifiable, Instrumentation}
 import org.apache.spark.rdd.RDD
 import org.apache.spark.sql.functions.col
 import org.apache.spark.sql.{Dataset, Row}
@@ -55,7 +56,7 @@ private[regression] trait GaussianProcessRegressionParams extends PredictorParam
 
 class GaussianProcessRegression(override val uid: String)
   extends Regressor[Vector, GaussianProcessRegression, GaussianProcessRegressionModel]
-    with GaussianProcessRegressionParams {
+    with GaussianProcessRegressionParams with Logging {
 
   class NotPositiveDefiniteException extends Exception("Some matrix which is supposed to be " +
     "positive definite is not. This probably happened due to `sigma2` parameter being too small." +
@@ -64,6 +65,8 @@ class GaussianProcessRegression(override val uid: String)
   def this() = this(Identifiable.randomUID("gaussProcessReg"))
 
   override protected def train(dataset: Dataset[_]): GaussianProcessRegressionModel = {
+    val instr = Instrumentation.create(this, dataset)
+
     val points: RDD[LabeledPoint] = dataset.select(
       col($(labelCol)), col($(featuresCol))).rdd.map {
       case Row(label: Double, features: Vector) =>
@@ -80,6 +83,8 @@ class GaussianProcessRegression(override val uid: String)
     val expertLabelsAndKernels: RDD[(BDV[Double], Kernel)] = (expertLabels zip expertKernels).cache()
     val sigma2 = $(this.sigma2)
 
+    instr.log("Optimising the kernel hyperparameters")
+
     val f = new DiffFunction[BDV[Double]] with Serializable {
       override def calculate(x: BDV[Double]): (Double, BDV[Double]) = {
         expertLabelsAndKernels.map { case (y, kernel) =>
@@ -94,6 +99,8 @@ class GaussianProcessRegression(override val uid: String)
       BDV[Double](x0.toArray.map(_ => inf)), maxIter = $(maxIter), tolerance = $(tol))
 
     val optimalHyperparameters = solver.minimize(f, BDV[Double](x0.toArray:_*))
+
+    instr.log("Optimal hyperparameter values: " + optimalHyperparameters )
 
     val activeSet = points.takeSample(withReplacement = false,
       $(activeSetSize), $(seed)).map(_.features)
@@ -114,7 +121,9 @@ class GaussianProcessRegression(override val uid: String)
     assertSymPositiveDefinite(positiveDefiniteMatrix)
     val magicVector = inv(positiveDefiniteMatrix) * KmnKnm2Kmny._2
 
-    new GaussianProcessRegressionModel(uid, magicVector, magicKernel)
+    val model = new GaussianProcessRegressionModel(uid, magicVector, magicKernel)
+    instr.logSuccess(model)
+    model
   }
 
   private def assertSymPositiveDefinite(matrix: BDM[Double]) = {
