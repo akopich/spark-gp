@@ -6,7 +6,7 @@ import breeze.optimize.{DiffFunction, LBFGSB}
 import org.apache.spark.internal.Logging
 import org.apache.spark.ml.PredictorParams
 import org.apache.spark.ml.feature.LabeledPoint
-import org.apache.spark.ml.linalg.{Vector, Vectors}
+import org.apache.spark.ml.linalg.Vector
 import org.apache.spark.ml.param.shared._
 import org.apache.spark.ml.param.{DoubleParam, IntParam, Param, ParamMap}
 import org.apache.spark.ml.regression.kernel.{Kernel, RBFKernel}
@@ -67,11 +67,7 @@ class GaussianProcessRegression(override val uid: String)
   override protected def train(dataset: Dataset[_]): GaussianProcessRegressionModel = {
     val instr = Instrumentation.create(this, dataset)
 
-    val points: RDD[LabeledPoint] = dataset.select(
-      col($(labelCol)), col($(featuresCol))).rdd.map {
-      case Row(label: Double, features: Vector) =>
-        LabeledPoint(label, features)
-    }
+    val points: RDD[LabeledPoint] = getPoints(dataset).cache()
 
     val expertLabelsAndKernels: RDD[(BDV[Double], Kernel)] = groupForExperts(points).map(chunk =>
       (BDV(chunk.map(_.label).toSeq :_*),
@@ -81,30 +77,16 @@ class GaussianProcessRegression(override val uid: String)
     val sigma2 = $(this.sigma2)
 
     instr.log("Optimising the kernel hyperparameters")
-
-    val f = new DiffFunction[BDV[Double]] with Serializable {
-      override def calculate(x: BDV[Double]): (Double, BDV[Double]) = {
-        expertLabelsAndKernels.map { case (y, kernel) =>
-          kernel.hyperparameters = Vectors.dense(x.toArray)
-          likelihoodAndGradient(y, kernel, sigma2)
-        }.reduce { case ((l1, r1), (l2,r2)) => (l1+l2, r1+r2)}
-      }
-    }
-
-    val x0 = $(kernel)().hyperparameters
-    val solver = new LBFGSB(BDV[Double](x0.toArray.map(_ => -inf)),
-      BDV[Double](x0.toArray.map(_ => inf)), maxIter = $(maxIter), tolerance = $(tol))
-
-    val optimalHyperparameters = solver.minimize(f, BDV[Double](x0.toArray:_*))
-
+    val optimalHyperparameters = optimizeHyperparameters(expertLabelsAndKernels, sigma2)
     instr.log("Optimal hyperparameter values: " + optimalHyperparameters )
 
     val activeSet = points.takeSample(withReplacement = false,
       $(activeSetSize), $(seed)).map(_.features)
     val activeSetBC = points.sparkContext.broadcast(activeSet)
+    points.unpersist()
 
     val KmnKnm2Kmny = expertLabelsAndKernels.map { case(y, k) =>
-      k.hyperparameters = Vectors.dense(optimalHyperparameters.toArray)
+      k.setHyperparameters(optimalHyperparameters)
       val kernelMatrix = k.crossKernel(activeSetBC.value)
       (kernelMatrix * kernelMatrix.t, kernelMatrix * y)
     }.reduce{ case ((l1, r1), (l2,r2)) => (l1+l2, r1+r2) }
@@ -113,7 +95,7 @@ class GaussianProcessRegression(override val uid: String)
     expertLabelsAndKernels.unpersist()
 
     val optimalKernel = $(kernel)().setTrainingVectors(activeSet)
-    optimalKernel.hyperparameters = Vectors.dense(optimalHyperparameters.toArray)
+      .setHyperparameters(optimalHyperparameters)
 
     val Kmm = regularizeMatrix(optimalKernel.trainingKernel(), sigma2)
 
@@ -124,6 +106,30 @@ class GaussianProcessRegression(override val uid: String)
     val model = new GaussianProcessRegressionModel(uid, magicVector, optimalKernel)
     instr.logSuccess(model)
     model
+  }
+
+  private def getPoints(dataset: Dataset[_]) = {
+    dataset.select(col($(labelCol)), col($(featuresCol))).rdd.map {
+      case Row(label: Double, features: Vector) => LabeledPoint(label, features)
+    }
+  }
+
+  private def optimizeHyperparameters(expertLabelsAndKernels: RDD[(BDV[Double], Kernel)],
+                                      sigma2: Double) = {
+    val f = new DiffFunction[BDV[Double]] with Serializable {
+      override def calculate(x: BDV[Double]): (Double, BDV[Double]) = {
+        expertLabelsAndKernels.map { case (y, kernel) =>
+          kernel.setHyperparameters(x)
+          likelihoodAndGradient(y, kernel, sigma2)
+        }.reduce { case ((l1, r1), (l2,r2)) => (l1+l2, r1+r2)}
+      }
+    }
+
+    val x0 = $(kernel)().hyperparameters
+    val solver = new LBFGSB(BDV[Double](x0.toArray.map(_ => -inf)),
+      BDV[Double](x0.toArray.map(_ => inf)), maxIter = $(maxIter), tolerance = $(tol))
+
+    solver.minimize(f, BDV[Double](x0.toArray:_*))
   }
 
   private def assertSymPositiveDefinite(matrix: BDM[Double]) = {

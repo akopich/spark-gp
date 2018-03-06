@@ -1,12 +1,17 @@
 package org.apache.spark.ml.regression.kernel
 
-import breeze.linalg.{diag, DenseMatrix => BDM, DenseVector => BDV}
+import breeze.linalg.{DenseMatrix => BDM, DenseVector => BDV}
 import breeze.numerics._
 import org.apache.spark.ml.linalg.{Vector, Vectors}
 
 
 trait Kernel {
-  var hyperparameters: Vector
+  var hyperparameters: BDV[Double]
+
+  def setHyperparameters(value: BDV[Double]): this.type = {
+    hyperparameters = value
+    this
+  }
 
   def setTrainingVectors(vectors: Array[Vector]): this.type
 
@@ -21,7 +26,7 @@ class TrainingVectorsNotInitializedException
   extends Exception("setTrainingVectors method should have been called first")
 
 class RBFKernel(sigma: Double) extends Kernel {
-  var hyperparameters : Vector = Vectors.dense(Array(sigma))
+  var hyperparameters : BDV[Double] = BDV[Double](sigma)
 
   private def getSigma() = hyperparameters(0)
 
