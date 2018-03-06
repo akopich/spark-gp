@@ -3,7 +3,7 @@ package org.apache.spark.ml.regression
 import org.apache.spark.ml.PredictorParams
 import org.apache.spark.ml.feature.LabeledPoint
 import org.apache.spark.ml.linalg.{Vector, Vectors}
-import org.apache.spark.ml.param.{IntParam, Param, ParamMap}
+import org.apache.spark.ml.param.{DoubleParam, IntParam, Param, ParamMap}
 import org.apache.spark.ml.param.shared._
 import org.apache.spark.ml.regression.kernel.{Kernel, RBFKernel}
 import org.apache.spark.ml.util.Identifiable
@@ -17,7 +17,7 @@ import breeze.numerics._
 import breeze.math._
 
 private[regression] trait GaussianProcessRegressionParams extends PredictorParams
-  with HasMaxIter with HasTol with HasStandardization with HasAggregationDepth {
+  with HasMaxIter with HasTol with HasStandardization with HasAggregationDepth with HasSeed {
 
   final val kernel = new Param[() => Kernel](this,
     "kernel", "function of no arguments which returns " +
@@ -25,6 +25,11 @@ private[regression] trait GaussianProcessRegressionParams extends PredictorParam
 
   final val datasetSizeForExpert = new IntParam(this,
     "datasetSizeForExpert", "the number of data points fed to each expert")
+
+  final val sigma2 = new DoubleParam(this,
+    "sigma2", "The variance of noise in the inputs. The value is added to the diagonal of the " +
+      "kernel Matrix. Also prevents numerical issues associated with inversion " +
+      "of a computationally singular matrix ")
 
   final val activeSetSize = new IntParam(this,
     "activeSetSize", "number of latent functions to project the process onto")
@@ -35,6 +40,9 @@ private[regression] trait GaussianProcessRegressionParams extends PredictorParam
   def setMaxIter(value: Int): this.type = set(maxIter, value)
   setDefault(maxIter -> 100)
 
+  def setSigma2(value: Double): this.type = set(sigma2, value)
+  setDefault(sigma2 -> 1e-3)
+
   def setKernel(value: () => Kernel): this.type = set(kernel, value)
   setDefault(kernel -> (() => new RBFKernel()))
 
@@ -43,6 +51,8 @@ private[regression] trait GaussianProcessRegressionParams extends PredictorParam
 
   def setActiveSetSize(value: Int): this.type = set(activeSetSize, value)
   setDefault(activeSetSize -> 100)
+
+  def setSeed(value: Long): this.type = set(seed, value)
 }
 
 class GaussianProcessRegression(override val uid: String)
@@ -66,12 +76,13 @@ class GaussianProcessRegression(override val uid: String)
     )
 
     val expertLabelsAndKernels: RDD[(BDV[Double], Kernel)] = (expertLabels zip expertKernels).cache()
+    val sigma2 = $(this.sigma2)
 
     val f = new DiffFunction[BDV[Double]] with Serializable {
       override def calculate(x: BDV[Double]): (Double, BDV[Double]) = {
         expertLabelsAndKernels.map { case (y, kernel) =>
           kernel.hyperparameters = Vectors.dense(x.toArray)
-          likelihoodAndGradient(y, kernel)
+          likelihoodAndGradient(y, kernel, sigma2)
         }.reduce { case ((l1, r1), (l2,r2)) => (l1+l2, r1+r2)}
       }
     }
@@ -82,7 +93,8 @@ class GaussianProcessRegression(override val uid: String)
 
     val optimalHyperparameters = solver.minimize(f, BDV[Double](x0.toArray:_*))
 
-    val activeSet = points.takeSample(withReplacement = false, $(activeSetSize)).map(_.features)
+    val activeSet = points.takeSample(withReplacement = false,
+      $(activeSetSize), $(seed)).map(_.features)
     val activeSetBC = points.sparkContext.broadcast(activeSet)
 
     val KmnKnm2Kmny = expertLabelsAndKernels.map { case(y, k) =>
@@ -93,17 +105,17 @@ class GaussianProcessRegression(override val uid: String)
 
     val magicKernel = $(kernel)().setTrainingVectors(activeSet)
     magicKernel.hyperparameters = Vectors.dense(optimalHyperparameters.toArray)
-    val Kmm = magicKernel.trainingKernel()
 
-    val sigma2 = 1e-4
+    val Kmm = regularizeMatrix(magicKernel.trainingKernel(), sigma2)
 
     val magicVector = inv(sigma2 * Kmm + KmnKnm2Kmny._1) * KmnKnm2Kmny._2
 
     new GaussianProcessRegressionModel(uid, magicVector, magicKernel)
   }
 
-  private def likelihoodAndGradient(y: BDV[Double], kernel : Kernel) = {
-    val (k, derivative) = kernel.trainingKernelAndDerivative()
+  private def likelihoodAndGradient(y: BDV[Double], kernel : Kernel, sigma2: Double) = {
+    val (kNotRegularized, derivative) = kernel.trainingKernelAndDerivative()
+    val k = regularizeMatrix(kNotRegularized, sigma2)
     val Kinv = inv(k)
     val alpha = Kinv * y
     val firstTerm :BDV[Double] = 0.5 * y.t * Kinv * y
@@ -119,11 +131,16 @@ class GaussianProcessRegression(override val uid: String)
     }.groupByKey().map(_._2)
   }
 
+  private def regularizeMatrix(matrix : BDM[Double], regularization: Double) = {
+    matrix + diag(BDV[Double]((0 until matrix.cols).map(_ => regularization).toArray))
+  }
+
   override def copy(extra: ParamMap): GaussianProcessRegression = ???
 }
 
 class GaussianProcessRegressionModel private[regression](override val uid: String,
-     private val  magicVector: BDV[Double], private val kernel: Kernel)
+                                                         val magicVector: BDV[Double],
+                                                         val kernel: Kernel)
   extends RegressionModel[Vector, GaussianProcessRegressionModel] {
 
   override def predict(features: Vector): Double = {

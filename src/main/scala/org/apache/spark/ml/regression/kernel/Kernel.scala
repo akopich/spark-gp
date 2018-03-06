@@ -20,7 +20,7 @@ trait Kernel {
 class TrainingVectorsNotInitializedException
   extends Exception("setTrainingVectors method should have been called first")
 
-class RBFKernel(sigma: Double, regularization: Double = 0) extends Kernel {
+class RBFKernel(sigma: Double) extends Kernel {
   var hyperparameters : Vector = Vectors.dense(Array(sigma))
 
   private def getSigma() = hyperparameters(0)
@@ -29,7 +29,7 @@ class RBFKernel(sigma: Double, regularization: Double = 0) extends Kernel {
 
   private var trainOption: Option[Array[Vector]] = None
 
-  def this() = this(1, 1e-6)
+  def this() = this(1)
 
   override def setTrainingVectors(vectors: Array[Vector]): this.type = {
     trainOption = Some(vectors)
@@ -45,11 +45,8 @@ class RBFKernel(sigma: Double, regularization: Double = 0) extends Kernel {
   }
 
   override def trainingKernel(): BDM[Double] = {
-    val nonRegularized = exp(squaredDistances.getOrElse(throw new TrainingVectorsNotInitializedException)
+    exp(squaredDistances.getOrElse(throw new TrainingVectorsNotInitializedException)
       / (-2d * getSigma()*getSigma()))
-
-    nonRegularized + diag(BDV[Double]((0 until nonRegularized.cols)
-      .map(_ => regularization).toArray))
   }
 
   override def trainingKernelAndDerivative(): (BDM[Double], Array[BDM[Double]]) = {
