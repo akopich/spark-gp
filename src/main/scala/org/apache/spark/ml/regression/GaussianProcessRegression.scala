@@ -73,14 +73,11 @@ class GaussianProcessRegression(override val uid: String)
         LabeledPoint(label, features)
     }
 
-    val groupedInstances = groupForExperts(points).cache()
+    val expertLabelsAndKernels: RDD[(BDV[Double], Kernel)] = groupForExperts(points).map(chunk =>
+      (BDV(chunk.map(_.label).toSeq :_*),
+        $(kernel)().setTrainingVectors(chunk.map(_.features).toArray))
+    ).cache()
 
-    val expertLabels = groupedInstances.map(points => BDV(points.map(_.label).toSeq :_*))
-    val expertKernels = groupedInstances.map(chunk =>
-      $(kernel)().setTrainingVectors(chunk.map(_.features).toArray)
-    )
-
-    val expertLabelsAndKernels: RDD[(BDV[Double], Kernel)] = (expertLabels zip expertKernels).cache()
     val sigma2 = $(this.sigma2)
 
     instr.log("Optimising the kernel hyperparameters")
@@ -112,16 +109,19 @@ class GaussianProcessRegression(override val uid: String)
       (kernelMatrix * kernelMatrix.t, kernelMatrix * y)
     }.reduce{ case ((l1, r1), (l2,r2)) => (l1+l2, r1+r2) }
 
-    val magicKernel = $(kernel)().setTrainingVectors(activeSet)
-    magicKernel.hyperparameters = Vectors.dense(optimalHyperparameters.toArray)
+    activeSetBC.destroy()
+    expertLabelsAndKernels.unpersist()
 
-    val Kmm = regularizeMatrix(magicKernel.trainingKernel(), sigma2)
+    val optimalKernel = $(kernel)().setTrainingVectors(activeSet)
+    optimalKernel.hyperparameters = Vectors.dense(optimalHyperparameters.toArray)
+
+    val Kmm = regularizeMatrix(optimalKernel.trainingKernel(), sigma2)
 
     val positiveDefiniteMatrix = sigma2 * Kmm + KmnKnm2Kmny._1
     assertSymPositiveDefinite(positiveDefiniteMatrix)
     val magicVector = inv(positiveDefiniteMatrix) * KmnKnm2Kmny._2
 
-    val model = new GaussianProcessRegressionModel(uid, magicVector, magicKernel)
+    val model = new GaussianProcessRegressionModel(uid, magicVector, optimalKernel)
     instr.logSuccess(model)
     model
   }
