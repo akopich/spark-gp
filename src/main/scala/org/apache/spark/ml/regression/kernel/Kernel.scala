@@ -29,7 +29,7 @@ class RBFKernel(sigma: Double, regularization: Double = 0) extends Kernel {
 
   private var trainOption: Option[Array[Vector]] = None
 
-  def this() = this(1)
+  def this() = this(1, 1e-6)
 
   override def setTrainingVectors(vectors: Array[Vector]): this.type = {
     trainOption = Some(vectors)

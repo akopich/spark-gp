@@ -26,6 +26,9 @@ private[regression] trait GaussianProcessRegressionParams extends PredictorParam
   final val datasetSizeForExpert = new IntParam(this,
     "datasetSizeForExpert", "the number of data points fed to each expert")
 
+  final val activeSetSize = new IntParam(this,
+    "activeSetSize", "number of latent functions to project the process onto")
+
   def setDatasetSizeForExpert(value: Int): this.type = set(datasetSizeForExpert, value)
   setDefault(datasetSizeForExpert -> 100)
 
@@ -37,6 +40,9 @@ private[regression] trait GaussianProcessRegressionParams extends PredictorParam
 
   def setTol(value: Double): this.type = set(tol, value)
   setDefault(tol -> 1E-6)
+
+  def setActiveSetSize(value: Int): this.type = set(activeSetSize, value)
+  setDefault(activeSetSize -> 100)
 }
 
 class GaussianProcessRegression(override val uid: String)
@@ -76,14 +82,24 @@ class GaussianProcessRegression(override val uid: String)
 
     val optimalHyperparameters = solver.minimize(f, BDV[Double](x0.toArray:_*))
 
-    expertLabelsAndKernels.foreach { case(_, k) =>
-      k.hyperparameters = Vectors.dense(optimalHyperparameters.toArray) }
+    val activeSet = points.takeSample(withReplacement = false, $(activeSetSize)).map(_.features)
+    val activeSetBC = points.sparkContext.broadcast(activeSet)
 
-    val expertKernelAndAlphas = expertLabelsAndKernels.map { case(y, kernel) =>
-      (kernel, inv(kernel.trainingKernel()) * y)
-    }.cache()
+    val KmnKnm2Kmny = expertLabelsAndKernels.map { case(y, k) =>
+      k.hyperparameters = Vectors.dense(optimalHyperparameters.toArray)
+      val kernelMatrix = k.crossKernel(activeSetBC.value)
+      (kernelMatrix * kernelMatrix.t, kernelMatrix * y)
+    }.reduce{ case ((l1, r1), (l2,r2)) => (l1+l2, r1+r2) }
 
-    new GaussianProcessRegressionModel(uid, expertKernelAndAlphas)
+    val magicKernel = $(kernel)().setTrainingVectors(activeSet)
+    magicKernel.hyperparameters = Vectors.dense(optimalHyperparameters.toArray)
+    val Kmm = magicKernel.trainingKernel()
+
+    val sigma2 = 1e-4
+
+    val magicVector = inv(sigma2 * Kmm + KmnKnm2Kmny._1) * KmnKnm2Kmny._2
+
+    new GaussianProcessRegressionModel(uid, magicVector, magicKernel)
   }
 
   private def likelihoodAndGradient(y: BDV[Double], kernel : Kernel) = {
@@ -107,15 +123,13 @@ class GaussianProcessRegression(override val uid: String)
 }
 
 class GaussianProcessRegressionModel private[regression](override val uid: String,
-     private val  expertLabelsAndKernels: RDD[(Kernel, BDV[Double])])
+     private val  magicVector: BDV[Double], private val kernel: Kernel)
   extends RegressionModel[Vector, GaussianProcessRegressionModel] {
 
   override def predict(features: Vector): Double = {
-    expertLabelsAndKernels.map { case(k, alpha) =>
-      val crossKernel = k.crossKernel(Array(features))
-      val res = crossKernel * alpha
-      res(0)
-    }.mean()
+    val kstar = kernel.crossKernel(Array(features))
+    val res = kstar * magicVector
+    res(0)
   }
 
   override def copy(extra: ParamMap): GaussianProcessRegressionModel = ???
