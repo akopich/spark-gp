@@ -118,9 +118,9 @@ class GaussianProcessRegression(override val uid: String)
                                       sigma2: Double) = {
     val f = new DiffFunction[BDV[Double]] with Serializable {
       override def calculate(x: BDV[Double]): (Double, BDV[Double]) = {
-        expertLabelsAndKernels.map { case (y, kernel) =>
-          kernel.setHyperparameters(x)
-          likelihoodAndGradient(y, kernel, sigma2)
+        expertLabelsAndKernels.map { case (expertY, expertKernel) =>
+          expertKernel.setHyperparameters(x)
+          likelihoodAndGradient(expertY, expertKernel, sigma2)
         }.reduce { case ((l1, r1), (l2,r2)) => (l1+l2, r1+r2)}
       }
     }
@@ -132,7 +132,7 @@ class GaussianProcessRegression(override val uid: String)
     solver.minimize(f, BDV[Double](x0.toArray:_*))
   }
 
-  private def assertSymPositiveDefinite(matrix: BDM[Double]) = {
+  private def assertSymPositiveDefinite(matrix: BDM[Double]): Unit = {
     if (any(eigSym(matrix).eigenvalues <:< 0d))
       throw new NotPositiveDefiniteException
   }
@@ -159,7 +159,7 @@ class GaussianProcessRegression(override val uid: String)
     matrix + diag(BDV[Double]((0 until matrix.cols).map(_ => regularization).toArray))
   }
 
-  override def copy(extra: ParamMap): GaussianProcessRegression = ???
+  override def copy(extra: ParamMap): GaussianProcessRegression = defaultCopy(extra)
 }
 
 class GaussianProcessRegressionModel private[regression](override val uid: String,
@@ -173,5 +173,9 @@ class GaussianProcessRegressionModel private[regression](override val uid: Strin
     res(0)
   }
 
-  override def copy(extra: ParamMap): GaussianProcessRegressionModel = ???
+  override def copy(extra: ParamMap): GaussianProcessRegressionModel = {
+    val newModel = copyValues(new GaussianProcessRegressionModel(uid,
+      magicVector, kernel), extra)
+    newModel.setParent(parent)
+  }
 }
