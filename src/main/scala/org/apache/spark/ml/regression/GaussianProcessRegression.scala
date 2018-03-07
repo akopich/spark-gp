@@ -14,6 +14,8 @@ import org.apache.spark.rdd.RDD
 import org.apache.spark.sql.functions.col
 import org.apache.spark.sql.{Dataset, Row}
 
+import scala.collection.mutable
+
 private[regression] trait GaussianProcessRegressionParams extends PredictorParams
   with HasMaxIter with HasTol with HasStandardization with HasAggregationDepth with HasSeed {
 
@@ -116,7 +118,15 @@ class GaussianProcessRegression(override val uid: String)
   private def optimizeHyperparameters(expertLabelsAndKernels: RDD[(BDV[Double], Kernel)],
                                       sigma2: Double) = {
     val f = new DiffFunction[BDV[Double]] with Serializable {
+      private val cache = mutable.HashMap[BDV[Double], (Double, BDV[Double])]()
+
       override def calculate(x: BDV[Double]): (Double, BDV[Double]) = {
+        cache.getOrElseUpdate(x, calculateNoMemory(x))
+      }
+
+      var cnt = 0
+      private def calculateNoMemory(x: BDV[Double]): (Double, BDV[Double]) = {
+        cnt += 1
         expertLabelsAndKernels.map { case (expertY, expertKernel) =>
           expertKernel.setHyperparameters(x)
           likelihoodAndGradient(expertY, expertKernel, sigma2)
