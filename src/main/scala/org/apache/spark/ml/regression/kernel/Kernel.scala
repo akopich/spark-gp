@@ -13,6 +13,8 @@ trait Kernel {
     this
   }
 
+  def hyperparameterBoundaries : (BDV[Double], BDV[Double])
+
   def setTrainingVectors(vectors: Array[Vector]): this.type
 
   def trainingKernel(): BDM[Double]
@@ -25,7 +27,9 @@ trait Kernel {
 class TrainingVectorsNotInitializedException
   extends Exception("setTrainingVectors method should have been called first")
 
-class RBFKernel(sigma: Double) extends Kernel {
+class RBFKernel(sigma: Double,
+                private var lower: Double = 0,
+                private var upper: Double = inf) extends Kernel {
   var hyperparameters : BDV[Double] = BDV[Double](sigma)
 
   private def getSigma() = hyperparameters(0)
@@ -35,6 +39,10 @@ class RBFKernel(sigma: Double) extends Kernel {
   private var trainOption: Option[Array[Vector]] = None
 
   def this() = this(1)
+
+  override def hyperparameterBoundaries: (BDV[Double], BDV[Double]) = {
+    (BDV[Double](lower), BDV[Double](upper))
+  }
 
   override def setTrainingVectors(vectors: Array[Vector]): this.type = {
     trainOption = Some(vectors)
