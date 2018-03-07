@@ -124,9 +124,7 @@ class GaussianProcessRegression(override val uid: String)
         cache.getOrElseUpdate(x, calculateNoMemory(x))
       }
 
-      var cnt = 0
       private def calculateNoMemory(x: BDV[Double]): (Double, BDV[Double]) = {
-        cnt += 1
         expertLabelsAndKernels.map { case (expertY, expertKernel) =>
           expertKernel.setHyperparameters(x)
           likelihoodAndGradient(expertY, expertKernel, sigma2)
