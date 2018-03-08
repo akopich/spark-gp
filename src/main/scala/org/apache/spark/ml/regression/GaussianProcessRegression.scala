@@ -17,7 +17,7 @@ import org.apache.spark.sql.{Dataset, Row}
 import scala.collection.mutable
 
 private[regression] trait GaussianProcessRegressionParams extends PredictorParams
-  with HasMaxIter with HasTol with HasStandardization with HasAggregationDepth with HasSeed {
+  with HasMaxIter with HasTol with HasAggregationDepth with HasSeed {
 
   final val kernel = new Param[() => Kernel](this,
     "kernel", "function of no arguments which returns " +
