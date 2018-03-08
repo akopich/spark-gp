@@ -5,7 +5,7 @@ import breeze.numerics._
 import org.apache.spark.ml.linalg.{Vector, Vectors}
 
 
-trait Kernel {
+trait Kernel extends Serializable {
   var hyperparameters: BDV[Double]
 
   def setHyperparameters(value: BDV[Double]): this.type = {
