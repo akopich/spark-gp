@@ -12,14 +12,9 @@ import org.apache.spark.sql.SparkSession
 
 
 object Airfoil extends App {
-  val spark = SparkSession
-    .builder()
-    .appName("Airfoil")
-    .master("local[4]")
-    .getOrCreate()
+  val spark = SparkSession.builder().appName("Airfoil").master("local[4]").getOrCreate()
 
-  val sqlContext= new org.apache.spark.sql.SQLContext(spark.sparkContext)
-  import sqlContext.implicits._
+  import spark.sqlContext.implicits._
 
   val airfoil = readSCV("data/airfoil.csv")
 
