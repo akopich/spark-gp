@@ -58,6 +58,26 @@ private[regression] trait GaussianProcessRegressionParams extends PredictorParam
   def setSeed(value: Long): this.type = set(seed, value)
 }
 
+/**
+  * Gaussian Process Regression.
+  *
+  * Fitting of hyperparameters and prediction for GPR is infeasible in high dimensional case due to
+  * high computational complexity O(N^3^).
+  *
+  * This implementation relies on the Bayesian Committee Machine proposed in [2] for fitting and on
+  * Projected Process Approximation for prediction Chapter 8.3.4 [1].
+  *
+  * This way the linear complexity in sample size is achieved for fitting,
+  * while prediction complexity doesn't depend on it.
+  *
+  * [1] Carl Edward Rasmussen and Christopher K. I. Williams. 2005. Gaussian Processes for Machine Learning
+  * (Adaptive Computation and Machine Learning). The MIT Press.
+  *
+  * [2] Marc Peter Deisenroth and Jun Wei Ng. 2015. Distributed Gaussian processes.
+  * In Proceedings of the 32nd International Conference on International Conference on Machine Learning
+  * Volume 37 (ICML'15), Francis Bach and David Blei (Eds.), Vol. 37. JMLR.org 1481-1490.
+  *
+  */
 class GaussianProcessRegression(override val uid: String)
   extends Regressor[Vector, GaussianProcessRegression, GaussianProcessRegressionModel]
     with GaussianProcessRegressionParams with Logging {
@@ -78,10 +98,8 @@ class GaussianProcessRegression(override val uid: String)
         $(kernel)().setTrainingVectors(chunk.map(_.features).toArray))
     ).cache()
 
-    val sigma2 = $(this.sigma2)
-
     instr.log("Optimising the kernel hyperparameters")
-    val optimalHyperparameters = optimizeHyperparameters(expertLabelsAndKernels, sigma2)
+    val optimalHyperparameters = optimizeHyperparameters(expertLabelsAndKernels, $(sigma2))
     instr.log("Optimal hyperparameter values: " + optimalHyperparameters )
 
     val activeSet = points.takeSample(withReplacement = false,
@@ -89,7 +107,9 @@ class GaussianProcessRegression(override val uid: String)
     val activeSetBC = points.sparkContext.broadcast(activeSet)
     points.unpersist()
 
-    val KmnKnm2Kmny = expertLabelsAndKernels.map { case(y, k) =>
+    // (K_mn * K_nm, K_mn * y)
+    // These multiplications are done in a distributed manner.
+    val KmnKnm2Kmny : (BDM[Double], BDV[Double]) = expertLabelsAndKernels.map { case(y, k) =>
       k.setHyperparameters(optimalHyperparameters)
       val kernelMatrix = k.crossKernel(activeSetBC.value)
       (kernelMatrix * kernelMatrix.t, kernelMatrix * y)
@@ -101,11 +121,11 @@ class GaussianProcessRegression(override val uid: String)
     val optimalKernel = $(kernel)().setTrainingVectors(activeSet)
       .setHyperparameters(optimalHyperparameters)
 
-    val Kmm = regularizeMatrix(optimalKernel.trainingKernel(), sigma2)
+    val Kmm = regularizeMatrix(optimalKernel.trainingKernel(), $(sigma2))
 
-    val positiveDefiniteMatrix = sigma2 * Kmm + KmnKnm2Kmny._1
+    val positiveDefiniteMatrix = $(sigma2) * Kmm + KmnKnm2Kmny._1  // sigma^2 K_mm + K_mn * K_nm
     assertSymPositiveDefinite(positiveDefiniteMatrix)
-    val magicVector = inv(positiveDefiniteMatrix) * KmnKnm2Kmny._2
+    val magicVector = inv(positiveDefiniteMatrix) * KmnKnm2Kmny._2 // inv(sigma^2 K_mm + K_mn * K_nm)*K_mn*y
 
     val model = new GaussianProcessRegressionModel(uid, magicVector, optimalKernel)
     instr.logSuccess(model)
