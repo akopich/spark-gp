@@ -109,11 +109,11 @@ class GaussianProcessRegression(override val uid: String)
 
     // (K_mn * K_nm, K_mn * y)
     // These multiplications are done in a distributed manner.
-    val KmnKnm2Kmny : (BDM[Double], BDV[Double]) = expertLabelsAndKernels.map { case(y, k) =>
+    val (matrixKmnKnm, vectorKmny) = expertLabelsAndKernels.map { case(y, k) =>
       k.setHyperparameters(optimalHyperparameters)
       val kernelMatrix = k.crossKernel(activeSetBC.value)
       (kernelMatrix * kernelMatrix.t, kernelMatrix * y)
-    }.reduce{ case ((l1, r1), (l2,r2)) => (l1+l2, r1+r2) }
+    }.reduce{ case ((l1, r1), (l2, r2)) => (l1+l2, r1+r2) }
 
     activeSetBC.destroy()
     expertLabelsAndKernels.unpersist()
@@ -123,9 +123,9 @@ class GaussianProcessRegression(override val uid: String)
 
     val Kmm = regularizeMatrix(optimalKernel.trainingKernel(), $(sigma2))
 
-    val positiveDefiniteMatrix = $(sigma2) * Kmm + KmnKnm2Kmny._1  // sigma^2 K_mm + K_mn * K_nm
+    val positiveDefiniteMatrix = $(sigma2) * Kmm + matrixKmnKnm  // sigma^2 K_mm + K_mn * K_nm
     assertSymPositiveDefinite(positiveDefiniteMatrix)
-    val magicVector = inv(positiveDefiniteMatrix) * KmnKnm2Kmny._2 // inv(sigma^2 K_mm + K_mn * K_nm)*K_mn*y
+    val magicVector = inv(positiveDefiniteMatrix) * vectorKmny // inv(sigma^2 K_mm + K_mn * K_nm)*K_mn*y
 
     val model = new GaussianProcessRegressionModel(uid, magicVector, optimalKernel)
     instr.logSuccess(model)
@@ -159,7 +159,7 @@ class GaussianProcessRegression(override val uid: String)
     val (lower, upper) = $(kernel)().hyperparameterBoundaries
     val solver = new LBFGSB(lower, upper, maxIter = $(maxIter), tolerance = $(tol))
 
-    solver.minimize(f, BDV[Double](x0.toArray:_*))
+    solver.minimize(f, x0)
   }
 
   private def assertSymPositiveDefinite(matrix: BDM[Double]): Unit = {
@@ -186,7 +186,7 @@ class GaussianProcessRegression(override val uid: String)
   }
 
   private def regularizeMatrix(matrix : BDM[Double], regularization: Double) = {
-    matrix + diag(BDV[Double]((0 until matrix.cols).map(_ => regularization).toArray))
+    matrix + diag(BDV[Double](Array.fill(matrix.cols)(regularization)))
   }
 
   override def copy(extra: ParamMap): GaussianProcessRegression = defaultCopy(extra)
