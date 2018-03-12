@@ -32,7 +32,9 @@ private[regression] trait GaussianProcessRegressionParams extends PredictorParam
       "of a computationally singular matrix ")
 
   final val activeSetSize = new IntParam(this,
-    "activeSetSize", "number of latent functions to project the process onto")
+    "activeSetSize", "number of latent functions to project the process onto. " +
+      "The size of the produced model and prediction complexity " +
+      "linearly depend on this value.")
 
   def setDatasetSizeForExpert(value: Int): this.type = set(datasetSizeForExpert, value)
   setDefault(datasetSizeForExpert -> 100)
