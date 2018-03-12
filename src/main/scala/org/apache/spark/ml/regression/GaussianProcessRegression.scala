@@ -93,19 +93,20 @@ class GaussianProcessRegression(override val uid: String)
 
     val points: RDD[LabeledPoint] = getPoints(dataset).cache()
 
-    val expertLabelsAndKernels: RDD[(BDV[Double], Kernel)] = groupForExperts(points).map(chunk =>
-      (BDV(chunk.map(_.label).toSeq :_*),
-        $(kernel)().setTrainingVectors(chunk.map(_.features).toArray))
-    ).cache()
+    val activeSet = points.takeSample(withReplacement = false,
+      $(activeSetSize), $(seed)).map(_.features)
+    points.unpersist()
+
+    val expertLabelsAndKernels: RDD[(BDV[Double], Kernel)] = groupForExperts(points).map { chunk =>
+      val (labels, trainingVectors) = chunk.map(lp => (lp.label, lp.features)).toArray.unzip
+      (BDV(labels: _*), $(kernel)().setTrainingVectors(trainingVectors))
+    }.cache()
 
     instr.log("Optimising the kernel hyperparameters")
     val optimalHyperparameters = optimizeHyperparameters(expertLabelsAndKernels, $(sigma2))
     instr.log("Optimal hyperparameter values: " + optimalHyperparameters )
 
-    val activeSet = points.takeSample(withReplacement = false,
-      $(activeSetSize), $(seed)).map(_.features)
     val activeSetBC = points.sparkContext.broadcast(activeSet)
-    points.unpersist()
 
     // (K_mn * K_nm, K_mn * y)
     // These multiplications are done in a distributed manner.
