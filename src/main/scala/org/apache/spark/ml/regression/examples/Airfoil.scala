@@ -2,19 +2,16 @@ package org.apache.spark.ml.regression.examples
 
 import breeze.linalg.DenseVector
 import breeze.numerics.sqrt
-import org.apache.spark.ml.evaluation.RegressionEvaluator
 import org.apache.spark.ml.feature.LabeledPoint
 import org.apache.spark.ml.linalg.Vectors
 import org.apache.spark.ml.regression.GaussianProcessRegression
-import org.apache.spark.ml.tuning.{CrossValidator, ParamGridBuilder}
 import org.apache.spark.rdd.RDD
-import org.apache.spark.sql.SparkSession
 
 
-object Airfoil extends App {
-  val spark = SparkSession.builder().appName("Airfoil").master("local[4]").getOrCreate()
-
+object Airfoil extends App with GPExample {
   import spark.sqlContext.implicits._
+
+  override def name = "Airfoil"
 
   val airfoil = readSCV("data/airfoil.csv")
 
@@ -22,13 +19,7 @@ object Airfoil extends App {
 
   val gp = new GaussianProcessRegression().setActiveSetSize(1000).setSigma2(1e-4)
 
-  val cv = new CrossValidator()
-    .setEstimator(gp)
-    .setEvaluator(new RegressionEvaluator())
-    .setEstimatorParamMaps(new ParamGridBuilder().build())
-    .setNumFolds(10)
-
-  println("RMSE: " + cv.fit(scaled).avgMetrics.head)
+  cv(gp, scaled, 2.8)
 
   def readSCV(path : String) = {
     spark.read.format("csv").load(path).rdd.map(row => {
