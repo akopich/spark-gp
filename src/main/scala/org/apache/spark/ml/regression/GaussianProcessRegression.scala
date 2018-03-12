@@ -24,7 +24,8 @@ private[regression] trait GaussianProcessRegressionParams extends PredictorParam
       "the kernel of the prior Gaussian Process")
 
   final val datasetSizeForExpert = new IntParam(this,
-    "datasetSizeForExpert", "the number of data points fed to each expert")
+    "datasetSizeForExpert", "The number of data points fed to each expert. " +
+      "Time and space complexity of training quadratically grows with it.")
 
   final val sigma2 = new DoubleParam(this,
     "sigma2", "The variance of noise in the inputs. The value is added to the diagonal of the " +
@@ -32,7 +33,7 @@ private[regression] trait GaussianProcessRegressionParams extends PredictorParam
       "of a computationally singular matrix ")
 
   final val activeSetSize = new IntParam(this,
-    "activeSetSize", "number of latent functions to project the process onto. " +
+    "activeSetSize", "Number of latent functions to project the process onto. " +
       "The size of the produced model and prediction complexity " +
       "linearly depend on this value.")
 
