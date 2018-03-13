@@ -1,6 +1,6 @@
 package org.apache.spark.ml.regression.kernel
 
-import breeze.linalg.{DenseMatrix, all}
+import breeze.linalg.{DenseMatrix, DenseVector, all}
 import breeze.numerics.abs
 import org.apache.spark.ml.linalg.Vectors
 import org.scalatest.FunSuite
@@ -64,6 +64,14 @@ class RBFKernelTest extends FunSuite {
     rbf.setTrainingVectors(dataset.drop(1))
     val crossKernel = rbf.crossKernel(dataset.take(1))
     val correctCrossKernel = DenseMatrix((6.737947e-03, 3.053624e-45))
+    assert(all(abs(crossKernel - correctCrossKernel) <:< 1e-4))
+  }
+
+  test("crossKernel returns correct kernel if called on a single vector") {
+    val rbf = new RBFKernel(math.sqrt(0.2))
+    rbf.setTrainingVectors(dataset.drop(1))
+    val crossKernel = rbf.crossKernel(dataset(0))
+    val correctCrossKernel = DenseVector(6.737947e-03, 3.053624e-45).t
     assert(all(abs(crossKernel - correctCrossKernel) <:< 1e-4))
   }
 }

@@ -173,8 +173,8 @@ class GaussianProcessRegression(override val uid: String)
     val k = regularizeMatrix(kNotRegularized, sigma2)
     val Kinv = inv(k)
     val alpha = Kinv * y
-    val firstTerm :BDV[Double] = 0.5 * y.t * Kinv * y
-    val likelihood = firstTerm(0) + 0.5 * logdet(k)._2
+    val firstTerm = 0.5 * (y.t * Kinv * y)
+    val likelihood = firstTerm + 0.5 * logdet(k)._2
     val gradient = derivative.map(derivative => -0.5 * sum((alpha * alpha.t - Kinv) *:* derivative))
     (likelihood, BDV(gradient:_*))
   }
@@ -199,9 +199,7 @@ class GaussianProcessRegressionModel private[regression](override val uid: Strin
   extends RegressionModel[Vector, GaussianProcessRegressionModel] {
 
   override def predict(features: Vector): Double = {
-    val kstar = kernel.crossKernel(Array(features))
-    val res = kstar * magicVector
-    res(0)
+    kernel.crossKernel(features) * magicVector
   }
 
   override def copy(extra: ParamMap): GaussianProcessRegressionModel = {
