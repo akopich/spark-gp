@@ -198,7 +198,7 @@ class GaussianProcessRegressionModel private[regression](override val uid: Strin
                                                          val kernel: Kernel)
   extends RegressionModel[Vector, GaussianProcessRegressionModel] {
 
-  override def predict(features: Vector): Double = {
+  override protected def predict(features: Vector): Double = {
     kernel.crossKernel(features) * magicVector
   }
 
