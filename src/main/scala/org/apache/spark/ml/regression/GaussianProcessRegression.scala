@@ -137,7 +137,7 @@ class GaussianProcessRegression(override val uid: String)
 
     val positiveDefiniteMatrix = $(sigma2) * Kmm + matrixKmnKnm  // sigma^2 K_mm + K_mn * K_nm
     assertSymPositiveDefinite(positiveDefiniteMatrix)
-    val magicVector = inv(positiveDefiniteMatrix) * vectorKmny // inv(sigma^2 K_mm + K_mn * K_nm)*K_mn*y
+    val magicVector = positiveDefiniteMatrix \ vectorKmny // inv(sigma^2 K_mm + K_mn * K_nm)*K_mn*y
 
     val model = new GaussianProcessRegressionModel(uid, magicVector, optimalKernel)
     instr.logSuccess(model)
@@ -187,7 +187,7 @@ class GaussianProcessRegression(override val uid: String)
     regularizeMatrix(k, sigma2)
     val Kinv = inv(k)
     val alpha = Kinv * y
-    val firstTerm = 0.5 * (y.t * Kinv * y)
+    val firstTerm = 0.5 * (y.t * alpha)
     val likelihood = firstTerm + 0.5 * logdet(k)._2
     val alphaAlphaTMinusKinv = alpha * alpha.t - Kinv
     val gradient = derivative.map(derivative => -0.5 * sum(alphaAlphaTMinusKinv *:* derivative))
