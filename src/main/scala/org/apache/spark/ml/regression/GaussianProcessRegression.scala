@@ -108,13 +108,23 @@ class GaussianProcessRegression(override val uid: String)
 
     val activeSetBC = points.sparkContext.broadcast(activeSet)
 
+    val elementWiseSum = (u: (BDM[Double], BDV[Double]), v: (BDM[Double], BDV[Double])) => {
+      u._1 += v._1
+      u._2 += v._2
+      u
+    }
+
     // (K_mn * K_nm, K_mn * y)
     // These multiplications are done in a distributed manner.
-    val (matrixKmnKnm, vectorKmny) = expertLabelsAndKernels.map { case(y, k) =>
-      k.setHyperparameters(optimalHyperparameters)
-      val kernelMatrix = k.crossKernel(activeSetBC.value)
-      (kernelMatrix * kernelMatrix.t, kernelMatrix * y)
-    }.reduce{ case ((l1, r1), (l2, r2)) => (l1+l2, r1+r2) }
+    val (matrixKmnKnm, vectorKmny) = expertLabelsAndKernels
+      .treeAggregate(BDM.zeros[Double]($(activeSetSize), $(activeSetSize)),
+        BDV.zeros[Double]($(activeSetSize)))({ case(u, (y, k)) =>
+          k.setHyperparameters(optimalHyperparameters)
+          val kernelMatrix = k.crossKernel(activeSetBC.value)
+          u._1 += kernelMatrix * kernelMatrix.t
+          u._2 += kernelMatrix * y
+          u
+      }, elementWiseSum)
 
     activeSetBC.destroy()
     expertLabelsAndKernels.unpersist()
@@ -149,10 +159,13 @@ class GaussianProcessRegression(override val uid: String)
       }
 
       private def calculateNoMemory(x: BDV[Double]): (Double, BDV[Double]) = {
-        expertLabelsAndKernels.map { case (expertY, expertKernel) =>
-          expertKernel.setHyperparameters(x)
-          likelihoodAndGradient(expertY, expertKernel, sigma2)
-        }.reduce { case ((l1, r1), (l2,r2)) => (l1+l2, r1+r2)}
+        expertLabelsAndKernels.treeAggregate((0d, BDV.zeros[Double](x.length)))({ case (u, (y, k)) =>
+          k.setHyperparameters(x)
+          val (likelihood, gradient) = likelihoodAndGradient(y, k, sigma2)
+          (u._1 + likelihood, u._2 += gradient)
+        }, { case (u, v) =>
+          (u._1 + v._1, u._2 += v._2)
+        })
       }
     }
 
