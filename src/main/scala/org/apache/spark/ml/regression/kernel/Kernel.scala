@@ -33,7 +33,7 @@ class TrainingVectorsNotInitializedException
   extends Exception("setTrainingVectors method should have been called first")
 
 class RBFKernel(sigma: Double,
-                private var lower: Double = 0,
+                private var lower: Double = 1e-6,
                 private var upper: Double = inf) extends Kernel {
   override var hyperparameters : BDV[Double] = BDV[Double](sigma)
 
