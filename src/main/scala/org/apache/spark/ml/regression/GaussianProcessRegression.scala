@@ -132,7 +132,8 @@ class GaussianProcessRegression(override val uid: String)
     val optimalKernel = $(kernel)().setTrainingVectors(activeSet)
       .setHyperparameters(optimalHyperparameters)
 
-    val Kmm = regularizeMatrix(optimalKernel.trainingKernel(), $(sigma2))
+    val Kmm = optimalKernel.trainingKernel()
+    regularizeMatrix(Kmm, $(sigma2))
 
     val positiveDefiniteMatrix = $(sigma2) * Kmm + matrixKmnKnm  // sigma^2 K_mm + K_mn * K_nm
     assertSymPositiveDefinite(positiveDefiniteMatrix)
@@ -182,13 +183,14 @@ class GaussianProcessRegression(override val uid: String)
   }
 
   private def likelihoodAndGradient(y: BDV[Double], kernel : Kernel, sigma2: Double) = {
-    val (kNotRegularized, derivative) = kernel.trainingKernelAndDerivative()
-    val k = regularizeMatrix(kNotRegularized, sigma2)
+    val (k, derivative) = kernel.trainingKernelAndDerivative()
+    regularizeMatrix(k, sigma2)
     val Kinv = inv(k)
     val alpha = Kinv * y
     val firstTerm = 0.5 * (y.t * Kinv * y)
     val likelihood = firstTerm + 0.5 * logdet(k)._2
-    val gradient = derivative.map(derivative => -0.5 * sum((alpha * alpha.t - Kinv) *:* derivative))
+    val alphaAlphaTMinusKinv = alpha * alpha.t - Kinv
+    val gradient = derivative.map(derivative => -0.5 * sum(alphaAlphaTMinusKinv *:* derivative))
     (likelihood, BDV(gradient:_*))
   }
 
@@ -199,8 +201,8 @@ class GaussianProcessRegression(override val uid: String)
     }.groupByKey().map(_._2)
   }
 
-  private def regularizeMatrix(matrix : BDM[Double], regularization: Double) = {
-    matrix + diag(BDV[Double](Array.fill(matrix.cols)(regularization)))
+  private def regularizeMatrix(matrix : BDM[Double], regularization: Double) : Unit = {
+    for (i <- 0 until matrix.cols) matrix(i, i) += regularization
   }
 
   override def copy(extra: ParamMap): GaussianProcessRegression = defaultCopy(extra)
