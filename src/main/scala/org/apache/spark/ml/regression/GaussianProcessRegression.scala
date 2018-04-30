@@ -67,7 +67,7 @@ private[regression] trait GaussianProcessRegressionParams extends PredictorParam
 /**
   * Gaussian Process Regression.
   *
-  * Fitting of hyperparameters and prediction for GPR is infeasible in high dimensional case due to
+  * Fitting of hyperparameters and prediction for GPR is infeasible for large datasets due to
   * high computational complexity O(N^3^).
   *
   * This implementation relies on the Bayesian Committee Machine proposed in [2] for fitting and on
