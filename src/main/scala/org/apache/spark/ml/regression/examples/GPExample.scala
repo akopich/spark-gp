@@ -22,7 +22,7 @@ trait GPExample {
       .setNumFolds(10)
 
     val rmse = cv.fit(instances).avgMetrics.head
-    assert(rmse < expectedRMSE)
     println("RMSE: " + rmse)
+    assert(rmse < expectedRMSE)
   }
 }

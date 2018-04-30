@@ -19,6 +19,9 @@ import scala.collection.mutable
 private[regression] trait GaussianProcessRegressionParams extends PredictorParams
   with HasMaxIter with HasTol with HasAggregationDepth with HasSeed {
 
+  final val activeSetProvider = new Param[ActiveSetProvider](this, "activeSetProvider",
+    "the class which provides the active set used by Projected Process Approximation")
+
   final val kernel = new Param[() => Kernel](this,
     "kernel", "function of no arguments which returns " +
       "the kernel of the prior Gaussian Process")
@@ -36,6 +39,9 @@ private[regression] trait GaussianProcessRegressionParams extends PredictorParam
     "activeSetSize", "Number of latent functions to project the process onto. " +
       "The size of the produced model and prediction complexity " +
       "linearly depend on this value.")
+
+  def setActiveSetProvider(value : ActiveSetProvider): this.type = set(activeSetProvider, value)
+  setDefault(activeSetProvider -> RandomActiveSetProvider)
 
   def setDatasetSizeForExpert(value: Int): this.type = set(datasetSizeForExpert, value)
   setDefault(datasetSizeForExpert -> 100)
@@ -80,11 +86,7 @@ private[regression] trait GaussianProcessRegressionParams extends PredictorParam
   */
 class GaussianProcessRegression(override val uid: String)
   extends Regressor[Vector, GaussianProcessRegression, GaussianProcessRegressionModel]
-    with GaussianProcessRegressionParams with Logging {
-
-  class NotPositiveDefiniteException extends Exception("Some matrix which is supposed to be " +
-    "positive definite is not. This probably happened due to `sigma2` parameter being too small." +
-    " Try to gradually increase it.")
+    with GaussianProcessRegressionParams with GaussianProcessRegressionHelper with Logging {
 
   def this() = this(Identifiable.randomUID("gaussProcessReg"))
 
@@ -92,10 +94,6 @@ class GaussianProcessRegression(override val uid: String)
     val instr = Instrumentation.create(this, dataset)
 
     val points: RDD[LabeledPoint] = getPoints(dataset).cache()
-
-    val activeSet = points.takeSample(withReplacement = false,
-      $(activeSetSize), $(seed)).map(_.features)
-    points.unpersist()
 
     val expertLabelsAndKernels: RDD[(BDV[Double], Kernel)] = groupForExperts(points).map { chunk =>
       val (labels, trainingVectors) = chunk.map(lp => (lp.label, lp.features)).toArray.unzip
@@ -106,38 +104,23 @@ class GaussianProcessRegression(override val uid: String)
     val optimalHyperparameters = optimizeHyperparameters(expertLabelsAndKernels, $(sigma2))
     instr.log("Optimal hyperparameter values: " + optimalHyperparameters )
 
-    val activeSetBC = points.sparkContext.broadcast(activeSet)
+    expertLabelsAndKernels.foreach(_._2.setHyperparameters(optimalHyperparameters))
 
-    val elementWiseSum = (u: (BDM[Double], BDV[Double]), v: (BDM[Double], BDV[Double])) => {
-      u._1 += v._1
-      u._2 += v._2
-      u
-    }
+    val activeSet = $(activeSetProvider)($(activeSetSize), expertLabelsAndKernels, points,
+      $(kernel), optimalHyperparameters, $(sigma2), $(seed))
 
-    // (K_mn * K_nm, K_mn * y)
-    // These multiplications are done in a distributed manner.
-    val (matrixKmnKnm, vectorKmny) = expertLabelsAndKernels
-      .treeAggregate(BDM.zeros[Double]($(activeSetSize), $(activeSetSize)),
-        BDV.zeros[Double]($(activeSetSize)))({ case(u, (y, k)) =>
-          k.setHyperparameters(optimalHyperparameters)
-          val kernelMatrix = k.crossKernel(activeSetBC.value)
-          u._1 += kernelMatrix * kernelMatrix.t
-          u._2 += kernelMatrix * y
-          u
-      }, elementWiseSum)
+    points.unpersist()
 
-    activeSetBC.destroy()
+    val (matrixKmnKnm, vectorKmny) = getMatrixKmnKnmAndVectorKmny(expertLabelsAndKernels, activeSet)
+
     expertLabelsAndKernels.unpersist()
 
     val optimalKernel = $(kernel)().setTrainingVectors(activeSet)
       .setHyperparameters(optimalHyperparameters)
 
-    val Kmm = optimalKernel.trainingKernel()
-    regularizeMatrix(Kmm, $(sigma2))
-
-    val positiveDefiniteMatrix = $(sigma2) * Kmm + matrixKmnKnm  // sigma^2 K_mm + K_mn * K_nm
-    assertSymPositiveDefinite(positiveDefiniteMatrix)
-    val magicVector = positiveDefiniteMatrix \ vectorKmny // inv(sigma^2 K_mm + K_mn * K_nm)*K_mn*y
+    // inv(sigma^2 K_mm + K_mn * K_nm) * K_mn * y
+    val magicVector = getMagicVector(optimalKernel, $(sigma2),
+      matrixKmnKnm, vectorKmny, activeSet, optimalHyperparameters)
 
     val model = new GaussianProcessRegressionModel(uid, magicVector, optimalKernel)
     instr.logSuccess(model)
@@ -177,18 +160,12 @@ class GaussianProcessRegression(override val uid: String)
     solver.minimize(f, x0)
   }
 
-  private def assertSymPositiveDefinite(matrix: BDM[Double]): Unit = {
-    if (any(eigSym(matrix).eigenvalues <:< 0d))
-      throw new NotPositiveDefiniteException
-  }
-
   private def likelihoodAndGradient(y: BDV[Double], kernel : Kernel, sigma2: Double) = {
     val (k, derivative) = kernel.trainingKernelAndDerivative()
     regularizeMatrix(k, sigma2)
     val Kinv = inv(k)
     val alpha = Kinv * y
-    val firstTerm = 0.5 * (y.t * alpha)
-    val likelihood = firstTerm + 0.5 * logdet(k)._2
+    val likelihood = 0.5 * (y.t * alpha) + 0.5 * logdet(k)._2
     val alphaAlphaTMinusKinv = alpha * alpha.t - Kinv
     val gradient = derivative.map(derivative => -0.5 * sum(alphaAlphaTMinusKinv *:* derivative))
     (likelihood, BDV(gradient:_*))
@@ -199,10 +176,6 @@ class GaussianProcessRegression(override val uid: String)
     points.zipWithIndex.map { case(instance, index) =>
       (index % numberOfExperts, instance)
     }.groupByKey().map(_._2)
-  }
-
-  private def regularizeMatrix(matrix : BDM[Double], regularization: Double) : Unit = {
-    for (i <- 0 until matrix.cols) matrix(i, i) += regularization
   }
 
   override def copy(extra: ParamMap): GaussianProcessRegression = defaultCopy(extra)
@@ -221,5 +194,71 @@ class GaussianProcessRegressionModel private[regression](override val uid: Strin
     val newModel = copyValues(new GaussianProcessRegressionModel(uid,
       magicVector, kernel), extra)
     newModel.setParent(parent)
+  }
+}
+
+trait GaussianProcessRegressionHelper {
+  class NotPositiveDefiniteException extends Exception("Some matrix which is supposed to be " +
+    "positive definite is not. This probably happened due to `sigma2` parameter being too small." +
+    " Try to gradually increase it.")
+
+  /**
+    * Does some matrix multiplications in a distributed manner.
+    *
+    * @param expertLabelsAndKernels
+    * @param activeSet
+    * @return (K_mn * K_nm, K_mn * y)
+    */
+  def getMatrixKmnKnmAndVectorKmny(expertLabelsAndKernels: RDD[(BDV[Double], Kernel)],
+                                   activeSet: Array[Vector]): (BDM[Double], BDV[Double]) = {
+    val activeSetSize = activeSet.length
+    val activeSetBC = expertLabelsAndKernels.sparkContext.broadcast(activeSet)
+
+    expertLabelsAndKernels.treeAggregate(BDM.zeros[Double](activeSetSize, activeSetSize),
+      BDV.zeros[Double](activeSetSize))({ case (u, (y, k)) =>
+      val kernelMatrix = k.crossKernel(activeSetBC.value)
+      u._1 += kernelMatrix * kernelMatrix.t
+      u._2 += kernelMatrix * y
+      u
+    }, { case (u, v) =>
+      u._1 += v._1
+      u._2 += v._2
+      u
+    })
+  }
+
+  /**
+    * Computes inv(sigma^2^ K_mm + K_mn * K_nm) * K_mn * y
+    *
+    * @param kernel Should be fully initialized: both `setHyperparameters` and `setTrainingVectors`
+    *               should called beforehand
+    * @param sigma2
+    * @param matrixKmnKnm
+    * @param vectorKmny
+    * @param activeSet
+    * @param optimalHyperparameter
+    * @return
+    */
+  def getMagicVector(kernel: Kernel,
+                     sigma2: Double,
+                     matrixKmnKnm: BDM[Double],
+                     vectorKmny: BDV[Double],
+                     activeSet: Array[Vector],
+                     optimalHyperparameter: BDV[Double]) = {
+    val Kmm = kernel.trainingKernel()
+    regularizeMatrix(Kmm, sigma2)
+
+    val positiveDefiniteMatrix = sigma2 * Kmm + matrixKmnKnm  // sigma^2 K_mm + K_mn * K_nm
+    assertSymPositiveDefinite(positiveDefiniteMatrix)
+    positiveDefiniteMatrix \ vectorKmny
+  }
+
+  protected def regularizeMatrix(matrix : BDM[Double], regularization: Double) : Unit = {
+    for (i <- 0 until matrix.cols) matrix(i, i) += regularization
+  }
+
+  protected def assertSymPositiveDefinite(matrix: BDM[Double]): Unit = {
+    if (any(eigSym(matrix).eigenvalues <:< 0d))
+      throw new NotPositiveDefiniteException
   }
 }

@@ -13,11 +13,15 @@ trait Kernel extends Serializable {
     this
   }
 
+  var trainOption: Option[Array[Vector]]
+
   def hyperparameterBoundaries : (BDV[Double], BDV[Double])
 
   def setTrainingVectors(vectors: Array[Vector]): this.type
 
   def trainingKernel(): BDM[Double]
+
+  def trainingKernelDiag(): Array[Double]
 
   def trainingKernelAndDerivative(): (BDM[Double], Array[BDM[Double]])
 
@@ -41,7 +45,7 @@ class RBFKernel(sigma: Double,
 
   private var squaredDistances: Option[BDM[Double]] = None
 
-  private var trainOption: Option[Array[Vector]] = None
+  var trainOption: Option[Array[Vector]] = None
 
   def this() = this(1)
 
@@ -84,6 +88,12 @@ class RBFKernel(sigma: Double,
     )
 
     exp(BDM.create(test.length, train.length, values))
+  }
+
+
+  override def trainingKernelDiag(): Array[Double] = {
+    val train = trainOption.getOrElse(throw new TrainingVectorsNotInitializedException)
+    train.map(_ => 1d)
   }
 
   private def sqr(x: Double) = x * x

@@ -4,8 +4,8 @@ import breeze.linalg._
 import breeze.numerics._
 import org.apache.spark.ml.feature.LabeledPoint
 import org.apache.spark.ml.linalg.Vectors
-import org.apache.spark.ml.regression.GaussianProcessRegression
 import org.apache.spark.ml.regression.kernel.RBFKernel
+import org.apache.spark.ml.regression.{GaussianProcessRegression, GreedilyOptimizingActiveSetProvider}
 
 object Synthetics extends App with GPExample {
   import spark.sqlContext.implicits._
@@ -21,9 +21,10 @@ object Synthetics extends App with GPExample {
   val gp = new GaussianProcessRegression()
     .setKernel(() => new RBFKernel(0.1))
     .setDatasetSizeForExpert(100)
-    .setActiveSetSize(100)
+    .setActiveSetProvider(GreedilyOptimizingActiveSetProvider)
+    .setActiveSetSize(10)
     .setSeed(13)
     .setSigma2(1e-3)
 
-  cv(gp, instances, 7e-5)
+  cv(gp, instances, 8e-5)
 }
