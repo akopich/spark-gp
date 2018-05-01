@@ -64,12 +64,12 @@ object GreedilyOptimizingActiveSetProvider extends ActiveSetProvider with Gaussi
                         sigma2: Double) = {
     val KinvBC = expertLabelsAndKernels.sparkContext.broadcast(inv(Kmm))
 
-    val labels2crossKernels = expertLabelsAndKernels.map{ case (y, k) =>
-      (y, k.crossKernel(activeSetBC.value), k.trainingKernelDiag(), k.trainOption.get)
+    val labels2crossKernels2kernels = expertLabelsAndKernels.map { case (y, k) =>
+      (y, k.crossKernel(activeSetBC.value), k)
     }.cache()
 
-    val (matrixKmnKnm, vectorKmny)  = labels2crossKernels
-      .map {case(y, crossKernel, _, _) => (crossKernel * crossKernel.t, crossKernel * y) }
+    val (matrixKmnKnm, vectorKmny)  = labels2crossKernels2kernels
+      .map {case(y, crossKernel, _) => (crossKernel * crossKernel.t, crossKernel * y) }
       .reduce((a,b) => (a._1 + b._1, a._2 + b._2))
 
     val positiveDefiniteMatrix = sigma2 * Kmm + matrixKmnKnm  // sigma^2 K_mm + K_mn * K_nm
@@ -80,8 +80,10 @@ object GreedilyOptimizingActiveSetProvider extends ActiveSetProvider with Gaussi
 
     val likelihood = vectorKmny.t * magicVector
 
-    val deltas2vectors = labels2crossKernels.map {case (y, crossKernel, kernelDiag, vectors) =>
-      val deltas = (0 until crossKernel.cols).map{ i =>
+    val deltas2vectors = labels2crossKernels2kernels.map { case (y, crossKernel, k) =>
+      val kernelDiag = k.trainingKernelDiag()
+      val (maxDelta, maxIndex) = (0 until crossKernel.cols)
+            .foldLeft((Double.MinValue, -1)){ case ((oldMax, oldMaxIndex), i) =>
         val column = crossKernel(::, i)
         val yi = y(i)
         val Kii = kernelDiag(i)
@@ -94,17 +96,19 @@ object GreedilyOptimizingActiveSetProvider extends ActiveSetProvider with Gaussi
         val ksii = 1d/ (sqr(sigma/li) + 1 - qi)
         val kappai = ksii * (1 + 2 * sqr(sigma/li))
 
-        -math.log(sigma/li) - (math.log(ksii) + ksii * (1-kappai) / sigma2 * sqr(yi - mui) - kappai + 2) / 2
+        val delta = -math.log(sigma/li) -
+          (math.log(ksii) + ksii * (1-kappai) / sigma2 * sqr(yi - mui) - kappai + 2) / 2
+
+        (math.max(delta, oldMax), if (oldMax > delta) oldMaxIndex else i)
       }
-      val i = deltas.indices.maxBy(deltas)
-      (deltas(i), vectors(i))
+      (maxDelta, k.trainOption.get(maxIndex))
     }
 
     val score2vector = deltas2vectors.filter(!_._1.isNaN).max()(new Ordering[(Double, Vector)] {
       override def compare(x: (Double, Vector), y: (Double, Vector)): Int = Ordering[Double].compare(x._1, y._1)
     })
 
-    labels2crossKernels.unpersist()
+    labels2crossKernels2kernels.unpersist()
     score2vector._2
   }
 
