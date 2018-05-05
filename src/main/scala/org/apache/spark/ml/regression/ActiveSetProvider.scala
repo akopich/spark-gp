@@ -37,13 +37,13 @@ object RandomActiveSetProvider extends ActiveSetProvider {
   *
   */
 object GreedilyOptimizingActiveSetProvider extends ActiveSetProvider with GaussianProcessRegressionHelper {
-  def apply(activeSetSize: Int,
-            expertLabelsAndKernels: RDD[(BDV[Double], Kernel)],
-            points: RDD[LabeledPoint],
-            kernel: () => Kernel,
-            optimalHyperparameter: BDV[Double],
-            sigma2: Double,
-            seed : Long) = {
+  override def apply(activeSetSize: Int,
+                      expertLabelsAndKernels: RDD[(BDV[Double], Kernel)],
+                      points: RDD[LabeledPoint],
+                      kernel: () => Kernel,
+                      optimalHyperparameter: BDV[Double],
+                      sigma2: Double,
+                      seed : Long) : Array[Vector] = {
     var activeSet = points.takeSample(withReplacement = false, 1, seed).map(_.features)
 
     while (activeSet.length <  activeSetSize) {
