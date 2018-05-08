@@ -1,8 +1,8 @@
 package org.apache.spark.ml.regression.kernel
 
-import breeze.linalg.{Transpose, DenseMatrix => BDM, DenseVector => BDV}
+import breeze.linalg.{Transpose, norm, DenseMatrix => BDM, DenseVector => BDV, Vector => BV}
 import breeze.numerics._
-import org.apache.spark.ml.linalg.{Vector, Vectors}
+import org.apache.spark.ml.linalg.{DenseVector, Vector, Vectors}
 
 
 trait Kernel extends Serializable {
@@ -37,8 +37,8 @@ class TrainingVectorsNotInitializedException
   extends Exception("setTrainingVectors method should have been called first")
 
 class RBFKernel(sigma: Double,
-                private var lower: Double = 1e-6,
-                private var upper: Double = inf) extends Kernel {
+                private val lower: Double = 1e-6,
+                private val upper: Double = inf) extends Kernel {
   override var hyperparameters : BDV[Double] = BDV[Double](sigma)
 
   private def getSigma() = hyperparameters(0)
@@ -100,3 +100,91 @@ class RBFKernel(sigma: Double,
 
   private def cube(x: Double) = x * x * x
 }
+
+
+class ARDRBFKernel(override var hyperparameters: BDV[Double],
+                   private val lower: BDV[Double],
+                   private val upper: BDV[Double]) extends Kernel {
+
+  def this(p : Int, beta: Double = 1, lower: Double = 0, upper : Double = inf) =
+    this(BDV.zeros[Double](p) + beta,
+      BDV.zeros[Double](p) + lower,
+      BDV.zeros[Double](p) + upper)
+
+  override def hyperparameterBoundaries: (BDV[Double], BDV[Double]) = (lower, upper)
+
+  override var trainOption: Option[Array[Vector]] = _
+
+  override def setTrainingVectors(vectors: Array[Vector]): this.type = {
+    trainOption = Some(vectors)
+    this
+  }
+
+  private def kernelElement(a: BV[Double], b: BV[Double]) : Double = {
+    val weightedDistance = norm((a - b) /:/ hyperparameters)
+    exp(- weightedDistance * weightedDistance)
+  }
+
+  override def trainingKernelDiag(): Array[Double] = {
+    val train = trainOption.getOrElse(throw new TrainingVectorsNotInitializedException)
+    train.map(_ => 1d)
+  }
+
+  override def trainingKernel(): BDM[Double] = {
+    val train = trainOption.getOrElse(throw new TrainingVectorsNotInitializedException)
+
+    val result = BDM.zeros[Double](train.length, train.length)
+    for (i <- train.indices; j <- 0 to i) {
+      val k = kernelElement(train(i).asBreeze, train(j).asBreeze)
+      result(i, j) = k
+      result(j, i) = k
+    }
+
+    result
+  }
+
+  override def trainingKernelAndDerivative(): (BDM[Double], Array[BDM[Double]]) = {
+    val train = trainOption.getOrElse(throw new TrainingVectorsNotInitializedException)
+    val K = trainingKernel()
+    val result = Array.fill[BDM[Double]](hyperparameters.length)(BDM.zeros[Double](train.length, train.length))
+
+    for (i <- train.indices; j <- 0 to i) {
+      val diff = train(i).asBreeze - train(j).asBreeze
+      val betaXi_Xj = diff *:* diff *:* hyperparameters
+      for (k <- 0 until hyperparameters.length) {
+        result(k)(i, j) = betaXi_Xj(k)
+        result(k)(j, i) = betaXi_Xj(k)
+      }
+    }
+
+    (K, result.map(derivative => derivative *:* K))
+  }
+
+  override def crossKernel(test: Array[Vector]): BDM[Double] = {
+    val train = trainOption.getOrElse(throw new TrainingVectorsNotInitializedException)
+    BDM.create(test.length, train.length, train.flatMap(trainVector =>
+      test.map(testVector => kernelElement(trainVector.asBreeze, testVector.asBreeze))
+    ))
+  }
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
