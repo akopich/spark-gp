@@ -123,27 +123,31 @@ class RBFKernel(sigma: Double,
   }
 
   override def trainingKernel(): BDM[Double] = {
-    exp(squaredDistances.getOrElse(throw new TrainingVectorsNotInitializedException)
-      / (-2d * sqr(getSigma()) ))
+    val result = squaredDistances.getOrElse(throw new TrainingVectorsNotInitializedException) / (-2d * sqr(getSigma()))
+    exp.inPlace(result)
+    result
   }
 
   override def trainingKernelAndDerivative(): (BDM[Double], Array[BDM[Double]]) = {
     val sqd = squaredDistances.getOrElse(throw new TrainingVectorsNotInitializedException)
 
     val kernel = trainingKernel()
-    val derivative = (sqd *:* kernel) / cube(getSigma())
+    val derivative = sqd *:* kernel
+    derivative /= cube(getSigma())
 
     (kernel, Array(derivative))
   }
 
   override def crossKernel(test: Array[Vector]): BDM[Double] = {
     val train = trainOption.getOrElse(throw new TrainingVectorsNotInitializedException)
-    val values = train.flatMap(trainVector =>
-      test.map(testVector =>
-        Vectors.sqdist(trainVector, testVector)/ (-2d * sqr(getSigma())))
-    )
+    val result = BDM.zeros[Double](test.length, train.length)
 
-    exp(BDM.create(test.length, train.length, values))
+    for (i <- test.indices; j <- train.indices)
+      result(i, j) = Vectors.sqdist(test(i), train(j)) / (-2d * sqr(getSigma()))
+
+    exp.inPlace(result)
+
+    result
   }
 
 
