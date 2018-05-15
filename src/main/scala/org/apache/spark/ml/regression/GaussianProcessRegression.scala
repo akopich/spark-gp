@@ -166,10 +166,15 @@ class GaussianProcessRegression(override val uid: String)
     val Kinv = inv(k)
     val alpha = Kinv * y
     val likelihood = 0.5 * (y.t * alpha) + 0.5 * logdet(k)._2
-    val alphaAlphaTMinusKinv = alpha * alpha.t - Kinv
-    val gradient = derivative.map(derivative => -0.5 * sum(alphaAlphaTMinusKinv *:* derivative))
+
+    val alphaAlphaTMinusKinv = alpha * alpha.t
+    alphaAlphaTMinusKinv -= Kinv
+
+    val gradient = derivative.map(derivative => -0.5 * traceOfProduct(alphaAlphaTMinusKinv, derivative))
     (likelihood, BDV(gradient:_*))
   }
+
+  private def traceOfProduct(a: BDM[Double], b: BDM[Double]) = BDV(a.data).t * BDV(b.data)
 
   private def groupForExperts(points: RDD[LabeledPoint]) = {
     val numberOfExperts = Math.round(points.count().toDouble / $(datasetSizeForExpert))
