@@ -1,6 +1,6 @@
 package org.apache.spark.ml.regression.kernel
 
-import breeze.linalg.{DenseMatrix, all, DenseMatrix => BDM, DenseVector => BDV}
+import breeze.linalg.{all, DenseMatrix => BDM, DenseVector => BDV}
 import breeze.numerics.abs
 import org.apache.spark.ml.linalg.Vectors
 import org.scalatest.FunSuite
@@ -8,7 +8,7 @@ import org.scalatest.FunSuite
 class ARDRBFKernelTest extends FunSuite {
   private val dataset = Array(Array(1d, 2d), Array(2d, 3d), Array(5d, 7d)).map(Vectors.dense)
 
-  private def computationalDerivative(beta: BDV[Double], h: Double): DenseMatrix[Double] = {
+  private def computationalDerivative(beta: BDV[Double], h: Double): BDM[Double] = {
     val left = new ARDRBFKernel(beta - h)
     val right = new ARDRBFKernel(beta + h)
 

@@ -226,9 +226,12 @@ class ARDRBFKernel(override var hyperparameters: BDV[Double],
 
   override def crossKernel(test: Array[Vector]): BDM[Double] = {
     val train = trainOption.getOrElse(throw new TrainingVectorsNotInitializedException)
-    BDM.create(test.length, train.length, train.flatMap(trainVector =>
-      test.map(testVector => kernelElement(trainVector.asBreeze, testVector.asBreeze))
-    ))
+    val result = BDM.zeros[Double](test.length, train.length)
+
+    for (testIndx <- test.indices; trainIndex <- train.indices)
+      result(testIndx, trainIndex) = kernelElement(train(trainIndex).asBreeze, test(testIndx).asBreeze)
+
+    result
   }
 }
 
