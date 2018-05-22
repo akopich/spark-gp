@@ -2,7 +2,7 @@ package org.apache.spark.ml.regression.kernel
 
 import breeze.linalg.{Transpose, norm, DenseMatrix => BDM, DenseVector => BDV, Vector => BV}
 import breeze.numerics._
-import org.apache.spark.ml.linalg.{DenseVector, Vector, Vectors}
+import org.apache.spark.ml.linalg.{Vector, Vectors}
 
 /**
   * Trait defining the covariance function `k` of a Gaussian Process
@@ -165,6 +165,8 @@ class ARDRBFKernel(override var hyperparameters: BDV[Double],
                    private val lower: BDV[Double],
                    private val upper: BDV[Double]) extends Kernel {
 
+  def this(hyperparameters: BDV[Double]) = this(hyperparameters, hyperparameters * 0d, hyperparameters * inf)
+
   def this(p : Int, beta: Double = 1, lower: Double = 0, upper : Double = inf) =
     this(BDV.zeros[Double](p) + beta,
       BDV.zeros[Double](p) + lower,
@@ -205,18 +207,21 @@ class ARDRBFKernel(override var hyperparameters: BDV[Double],
   override def trainingKernelAndDerivative(): (BDM[Double], Array[BDM[Double]]) = {
     val train = trainOption.getOrElse(throw new TrainingVectorsNotInitializedException)
     val K = trainingKernel()
+    val minus2Kernel = -2d * K
     val result = Array.fill[BDM[Double]](hyperparameters.length)(BDM.zeros[Double](train.length, train.length))
 
     for (i <- train.indices; j <- 0 to i) {
       val diff = train(i).asBreeze - train(j).asBreeze
-      val betaXi_Xj = diff *:* diff *:* hyperparameters
+      diff :*= diff
+      diff :*= hyperparameters
+      val betaXi_Xj = diff
       for (k <- 0 until hyperparameters.length) {
         result(k)(i, j) = betaXi_Xj(k)
         result(k)(j, i) = betaXi_Xj(k)
       }
     }
 
-    (K, result.map(derivative => -2d * derivative *:* K))
+    (K, result.map(derivative => derivative *:* minus2Kernel))
   }
 
   override def crossKernel(test: Array[Vector]): BDM[Double] = {
