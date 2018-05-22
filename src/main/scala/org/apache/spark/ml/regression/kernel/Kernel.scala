@@ -180,7 +180,7 @@ class ARDRBFKernel(override var hyperparameters: BDV[Double],
   }
 
   private def kernelElement(a: BV[Double], b: BV[Double]) : Double = {
-    val weightedDistance = norm((a - b) /:/ hyperparameters)
+    val weightedDistance = norm((a - b) *:* hyperparameters)
     exp(- weightedDistance * weightedDistance)
   }
 
@@ -216,7 +216,7 @@ class ARDRBFKernel(override var hyperparameters: BDV[Double],
       }
     }
 
-    (K, result.map(derivative => derivative *:* K))
+    (K, result.map(derivative => -2d * derivative *:* K))
   }
 
   override def crossKernel(test: Array[Vector]): BDM[Double] = {
