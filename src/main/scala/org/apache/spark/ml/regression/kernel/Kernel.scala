@@ -14,12 +14,12 @@ trait Kernel extends Serializable {
   /**
     * A vector of hyperparameters of the kernel
     */
-  var hyperparameters: BDV[Double]
+  protected var hyperparameters: BDV[Double]
 
   /**
     * Stores some portion of the training sample
     */
-  var trainOption: Option[Array[Vector]]
+  protected var trainOption: Option[Array[Vector]]
 
   /**
     * Setter
@@ -95,13 +95,13 @@ class TrainingVectorsNotInitializedException
 class RBFKernel(sigma: Double,
                 private val lower: Double = 1e-6,
                 private val upper: Double = inf) extends Kernel {
-  override var hyperparameters : BDV[Double] = BDV[Double](sigma)
+  override protected var hyperparameters : BDV[Double] = BDV[Double](sigma)
 
   private def getSigma() = hyperparameters(0)
 
   private var squaredDistances: Option[BDM[Double]] = None
 
-  var trainOption: Option[Array[Vector]] = None
+  override protected var trainOption: Option[Array[Vector]] = None
 
   def this() = this(1)
 
@@ -161,7 +161,7 @@ class RBFKernel(sigma: Double,
 }
 
 
-class ARDRBFKernel(override var hyperparameters: BDV[Double],
+class ARDRBFKernel(override protected var hyperparameters: BDV[Double],
                    private val lower: BDV[Double],
                    private val upper: BDV[Double]) extends Kernel {
 
@@ -174,7 +174,7 @@ class ARDRBFKernel(override var hyperparameters: BDV[Double],
 
   override def hyperparameterBoundaries: (BDV[Double], BDV[Double]) = (lower, upper)
 
-  override var trainOption: Option[Array[Vector]] = _
+  override protected var trainOption: Option[Array[Vector]] = _
 
   override def setTrainingVectors(vectors: Array[Vector]): this.type = {
     trainOption = Some(vectors)
