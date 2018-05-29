@@ -12,9 +12,11 @@ class ScalarTimesKernel(private val kernel: Kernel,
 
   override def setHyperparameters(value: BDV[Double]): ScalarTimesKernel.this.type = {
     C = value(0)
-    kernel.setHyperparameters(value(1 to value.length))
+    kernel.setHyperparameters(value(1 until value.length))
     this
   }
+
+  override def numberOfHyperparameters: Int = 1 + kernel.numberOfHyperparameters
 
   private def prependToVector(c : Double, v : BDV[Double]) = BDV[Double](c +: v.data)
 

@@ -24,6 +24,8 @@ trait Kernel extends Serializable {
     */
   def setHyperparameters(value: BDV[Double]): this.type
 
+  def numberOfHyperparameters: Int
+
   /**
     *
     * @return boundaries lower and upper: lower <= hyperparameter <= upper (inequalities are element-wise).
@@ -101,6 +103,9 @@ class RBFKernel(sigma: Double,
   }
 
   override def getHyperparameters: BDV[Double] = hyperparameters
+
+
+  override def numberOfHyperparameters: Int = 1
 
   private def getSigma() = hyperparameters(0)
 
@@ -180,6 +185,9 @@ class ARDRBFKernel(private var hyperparameters: BDV[Double],
   }
 
   override def getHyperparameters: BDV[Double] = hyperparameters
+
+
+  override def numberOfHyperparameters: Int = hyperparameters.length
 
   def this(p : Int, beta: Double = 1, lower: Double = 0, upper : Double = inf) =
     this(BDV.zeros[Double](p) + beta,
