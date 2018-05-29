@@ -101,7 +101,7 @@ object GreedilyOptimizingActiveSetProvider extends ActiveSetProvider with Gaussi
 
         (math.max(delta, oldMax), if (oldMax > delta) oldMaxIndex else i)
       }
-      (maxDelta, k.trainOption.get(maxIndex))
+      (maxDelta, k.getTrainingVectors.get(maxIndex))
     }
 
     val score2vector = deltas2vectors.filter(!_._1.isNaN).max()(new Ordering[(Double, Vector)] {

@@ -12,14 +12,9 @@ import org.apache.spark.ml.linalg.{Vector, Vectors}
   */
 trait Kernel extends Serializable {
   /**
-    * A vector of hyperparameters of the kernel
+    * Returns a vector of hyperparameters of the kernel
     */
-  protected var hyperparameters: BDV[Double]
-
-  /**
-    * Stores some portion of the training sample
-    */
-  protected var trainOption: Option[Array[Vector]]
+  def getHyperparameters: BDV[Double]
 
   /**
     * Setter
@@ -27,16 +22,19 @@ trait Kernel extends Serializable {
     * @param value
     * @return this
     */
-  def setHyperparameters(value: BDV[Double]): this.type = {
-    hyperparameters = value
-    this
-  }
+  def setHyperparameters(value: BDV[Double]): this.type
 
   /**
     *
     * @return boundaries lower and upper: lower <= hyperparameter <= upper (inequalities are element-wise).
     */
   def hyperparameterBoundaries : (BDV[Double], BDV[Double])
+
+
+  /**
+    * Returns the portion of the training sample the kernel is computed with respect to.
+    */
+  def getTrainingVectors: Option[Array[Vector]]
 
   /**
     *
@@ -95,19 +93,28 @@ class TrainingVectorsNotInitializedException
 class RBFKernel(sigma: Double,
                 private val lower: Double = 1e-6,
                 private val upper: Double = inf) extends Kernel {
-  override protected var hyperparameters : BDV[Double] = BDV[Double](sigma)
+  private var hyperparameters : BDV[Double] = BDV[Double](sigma)
+
+  override def setHyperparameters(value: BDV[Double]): RBFKernel.this.type = {
+    hyperparameters = value
+    this
+  }
+
+  override def getHyperparameters: BDV[Double] = hyperparameters
 
   private def getSigma() = hyperparameters(0)
 
   private var squaredDistances: Option[BDM[Double]] = None
 
-  override protected var trainOption: Option[Array[Vector]] = None
+  var trainOption: Option[Array[Vector]] = None
 
   def this() = this(1)
 
   override def hyperparameterBoundaries: (BDV[Double], BDV[Double]) = {
     (BDV[Double](lower), BDV[Double](upper))
   }
+
+  override def getTrainingVectors: Option[Array[Vector]] = trainOption
 
   override def setTrainingVectors(vectors: Array[Vector]): this.type = {
     trainOption = Some(vectors)
@@ -161,11 +168,18 @@ class RBFKernel(sigma: Double,
 }
 
 
-class ARDRBFKernel(override protected var hyperparameters: BDV[Double],
+class ARDRBFKernel(private var hyperparameters: BDV[Double],
                    private val lower: BDV[Double],
                    private val upper: BDV[Double]) extends Kernel {
 
   def this(hyperparameters: BDV[Double]) = this(hyperparameters, hyperparameters * 0d, hyperparameters * inf)
+
+  override def setHyperparameters(value: BDV[Double]): ARDRBFKernel.this.type = {
+    hyperparameters = value
+    this
+  }
+
+  override def getHyperparameters: BDV[Double] = hyperparameters
 
   def this(p : Int, beta: Double = 1, lower: Double = 0, upper : Double = inf) =
     this(BDV.zeros[Double](p) + beta,
@@ -174,7 +188,9 @@ class ARDRBFKernel(override protected var hyperparameters: BDV[Double],
 
   override def hyperparameterBoundaries: (BDV[Double], BDV[Double]) = (lower, upper)
 
-  override protected var trainOption: Option[Array[Vector]] = _
+  private var trainOption: Option[Array[Vector]] = _
+
+  override def getTrainingVectors: Option[Array[Vector]] = trainOption
 
   override def setTrainingVectors(vectors: Array[Vector]): this.type = {
     trainOption = Some(vectors)

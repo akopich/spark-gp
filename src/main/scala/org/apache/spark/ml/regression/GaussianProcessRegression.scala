@@ -1,6 +1,6 @@
 package org.apache.spark.ml.regression
 
-import breeze.linalg.{inv, logdet, sum, DenseMatrix => BDM, DenseVector => BDV, _}
+import breeze.linalg.{inv, logdet, DenseMatrix => BDM, DenseVector => BDV, _}
 import breeze.optimize.{DiffFunction, LBFGSB}
 import org.apache.spark.internal.Logging
 import org.apache.spark.ml.PredictorParams
@@ -153,7 +153,7 @@ class GaussianProcessRegression(override val uid: String)
       }
     }
 
-    val x0 = $(kernel)().hyperparameters
+    val x0 = $(kernel)().getHyperparameters
     val (lower, upper) = $(kernel)().hyperparameterBoundaries
     val solver = new LBFGSB(lower, upper, maxIter = $(maxIter), tolerance = $(tol))
 
