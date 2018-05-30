@@ -171,12 +171,29 @@ class RBFKernel(private var sigma: Double,
 
 }
 
-
+/**
+  * Automatic Relevance Determination Kernel.
+  *
+  * Is a straightforward generalization of RBF kernel.
+  *
+  * `k(x_i, k_j) = exp(||(x_i - x_j) \otimes beta||^2)`,
+  *
+  * where beta is a vector and \otimes stands for element-wise product
+  *
+  * @param beta  the vector of the same dimensionality as inputs
+  * @param lower element-wise lower bound
+  * @param upper element-upper lower bound
+  */
 class ARDRBFKernel(private var beta: BDV[Double],
                    private val lower: BDV[Double],
                    private val upper: BDV[Double]) extends Kernel {
 
   def this(beta: BDV[Double]) = this(beta, beta * 0d, beta * inf)
+
+  def this(p : Int, beta: Double = 1, lower: Double = 0, upper : Double = inf) =
+    this(BDV.zeros[Double](p) + beta,
+      BDV.zeros[Double](p) + lower,
+      BDV.zeros[Double](p) + upper)
 
   override def setHyperparameters(value: BDV[Double]): ARDRBFKernel.this.type = {
     beta = value
@@ -185,13 +202,7 @@ class ARDRBFKernel(private var beta: BDV[Double],
 
   override def getHyperparameters: BDV[Double] = beta
 
-
   override def numberOfHyperparameters: Int = beta.length
-
-  def this(p : Int, beta: Double = 1, lower: Double = 0, upper : Double = inf) =
-    this(BDV.zeros[Double](p) + beta,
-      BDV.zeros[Double](p) + lower,
-      BDV.zeros[Double](p) + upper)
 
   override def hyperparameterBoundaries: (BDV[Double], BDV[Double]) = (lower, upper)
 
