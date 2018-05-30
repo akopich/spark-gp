@@ -25,7 +25,7 @@ class ScalarTimesKernel(private val kernel: Kernel,
     (prependToVector(Clower, lower), prependToVector(Cupper, upper))
   }
 
-  override def getTrainingVectors: Option[Array[linalg.Vector]] = kernel.getTrainingVectors
+  override def getTrainingVectors(): Array[linalg.Vector] = kernel.getTrainingVectors
 
   override def setTrainingVectors(vectors: Array[linalg.Vector]): ScalarTimesKernel.this.type = {
     kernel.setTrainingVectors(vectors)

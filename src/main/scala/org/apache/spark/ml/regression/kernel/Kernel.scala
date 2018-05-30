@@ -35,8 +35,11 @@ trait Kernel extends Serializable {
 
   /**
     * Returns the portion of the training sample the kernel is computed with respect to.
+    *
+    * The method `setTrainingVectors` should be called beforehand.
+    * `TrainingVectorsNotInitializedException` is thrown otherwise.
     */
-  def getTrainingVectors: Option[Array[Vector]]
+  def getTrainingVectors: Array[Vector]
 
   /**
     *
@@ -86,6 +89,22 @@ class TrainingVectorsNotInitializedException
   extends Exception("setTrainingVectors method should have been called first")
 
 /**
+  * Most of the basic (non-composite ones like `SumOfKernels`) kernels have own a portion of a dataset.
+  * The trait does exactly this.
+  */
+trait TrainDatasetBearingKernel extends Kernel {
+  private var trainOption: Option[Array[Vector]] = None
+
+  override def getTrainingVectors: Array[Vector] =
+    trainOption.getOrElse(throw new TrainingVectorsNotInitializedException)
+
+  override def setTrainingVectors(vectors: Array[Vector]): this.type = {
+    trainOption = Some(vectors)
+    this
+  }
+}
+
+/**
   * Implements traditional RBF kernel `k(x_i, k_j) = exp(||x_i - x_j||^2 / sigma^2)`
   *
   * @param sigma
@@ -94,7 +113,9 @@ class TrainingVectorsNotInitializedException
   */
 class RBFKernel(private var sigma: Double,
                 private val lower: Double = 1e-6,
-                private val upper: Double = inf) extends Kernel {
+                private val upper: Double = inf) extends TrainDatasetBearingKernel {
+  def this() = this(1)
+
   override def setHyperparameters(value: BDV[Double]): RBFKernel.this.type = {
     sigma = value(0)
     this
@@ -108,18 +129,12 @@ class RBFKernel(private var sigma: Double,
 
   private var squaredDistances: Option[BDM[Double]] = None
 
-  var trainOption: Option[Array[Vector]] = None
-
-  def this() = this(1)
-
   override def hyperparameterBoundaries: (BDV[Double], BDV[Double]) = {
     (BDV[Double](lower), BDV[Double](upper))
   }
 
-  override def getTrainingVectors: Option[Array[Vector]] = trainOption
-
   override def setTrainingVectors(vectors: Array[Vector]): this.type = {
-    trainOption = Some(vectors)
+    super.setTrainingVectors(vectors)
     val sqd = BDM.zeros[Double](vectors.length, vectors.length)
     for (i <- vectors.indices; j <- 0 to i) {
       val dist = Vectors.sqdist(vectors(i), vectors(j))
@@ -148,7 +163,7 @@ class RBFKernel(private var sigma: Double,
   }
 
   override def crossKernel(test: Array[Vector]): BDM[Double] = {
-    val train = trainOption.getOrElse(throw new TrainingVectorsNotInitializedException)
+    val train = getTrainingVectors
     val result = BDM.zeros[Double](test.length, train.length)
 
     for (i <- test.indices; j <- train.indices)
@@ -161,7 +176,7 @@ class RBFKernel(private var sigma: Double,
 
 
   override def trainingKernelDiag(): Array[Double] = {
-    trainOption.getOrElse(throw new TrainingVectorsNotInitializedException).map(_ => 1d)
+    getTrainingVectors.map(_ => 1d)
   }
 
   private def sqr(x: Double) = x * x
@@ -186,7 +201,7 @@ class RBFKernel(private var sigma: Double,
   */
 class ARDRBFKernel(private var beta: BDV[Double],
                    private val lower: BDV[Double],
-                   private val upper: BDV[Double]) extends Kernel {
+                   private val upper: BDV[Double]) extends TrainDatasetBearingKernel {
 
   def this(beta: BDV[Double]) = this(beta, beta * 0d, beta * inf)
 
@@ -206,27 +221,17 @@ class ARDRBFKernel(private var beta: BDV[Double],
 
   override def hyperparameterBoundaries: (BDV[Double], BDV[Double]) = (lower, upper)
 
-  private var trainOption: Option[Array[Vector]] = _
-
-  override def getTrainingVectors: Option[Array[Vector]] = trainOption
-
-  override def setTrainingVectors(vectors: Array[Vector]): this.type = {
-    trainOption = Some(vectors)
-    this
-  }
-
   private def kernelElement(a: BV[Double], b: BV[Double]) : Double = {
     val weightedDistance = norm((a - b) *:* beta)
     exp(- weightedDistance * weightedDistance)
   }
 
   override def trainingKernelDiag(): Array[Double] = {
-    val train = trainOption.getOrElse(throw new TrainingVectorsNotInitializedException)
-    train.map(_ => 1d)
+    getTrainingVectors.map(_ => 1d)
   }
 
   override def trainingKernel(): BDM[Double] = {
-    val train = trainOption.getOrElse(throw new TrainingVectorsNotInitializedException)
+    val train = getTrainingVectors
 
     val result = BDM.zeros[Double](train.length, train.length)
     for (i <- train.indices; j <- 0 to i) {
@@ -239,7 +244,7 @@ class ARDRBFKernel(private var beta: BDV[Double],
   }
 
   override def trainingKernelAndDerivative(): (BDM[Double], Array[BDM[Double]]) = {
-    val train = trainOption.getOrElse(throw new TrainingVectorsNotInitializedException)
+    val train = getTrainingVectors
     val K = trainingKernel()
     val minus2Kernel = -2d * K
     val result = Array.fill[BDM[Double]](beta.length)(BDM.zeros[Double](train.length, train.length))
@@ -259,7 +264,7 @@ class ARDRBFKernel(private var beta: BDV[Double],
   }
 
   override def crossKernel(test: Array[Vector]): BDM[Double] = {
-    val train = trainOption.getOrElse(throw new TrainingVectorsNotInitializedException)
+    val train = getTrainingVectors
     val result = BDM.zeros[Double](test.length, train.length)
 
     for (testIndx <- test.indices; trainIndex <- train.indices)
@@ -268,24 +273,3 @@ class ARDRBFKernel(private var beta: BDV[Double],
     result
   }
 }
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-

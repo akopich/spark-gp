@@ -24,7 +24,7 @@ class SumOfKernels(private val kernel1: Kernel,
     (concat(lower1, lower2), concat(upper1, upper2))
   }
 
-  override def getTrainingVectors: Option[Array[linalg.Vector]] = kernel1.getTrainingVectors
+  override def getTrainingVectors(): Array[linalg.Vector] = kernel1.getTrainingVectors
 
   override def setTrainingVectors(vectors: Array[linalg.Vector]): SumOfKernels.this.type = {
     kernel1.setTrainingVectors(vectors)
