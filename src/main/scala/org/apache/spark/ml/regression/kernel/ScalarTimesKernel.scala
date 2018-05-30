@@ -44,7 +44,7 @@ class ScalarTimesKernel(private val kernel: Kernel,
 
   override def crossKernel(test: Array[linalg.Vector]): DenseMatrix[Double] = C * kernel.crossKernel(test)
 
-  override def iidNoise: Double = C * kernel.iidNoise
+  override def whiteNoiseVar: Double = C * kernel.whiteNoiseVar
 }
 
 class Scalar private[kernel](private val C: Double,

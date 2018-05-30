@@ -87,9 +87,16 @@ trait Kernel extends Serializable {
 
   /**
     *
-    * @return how much of i.i.d. noise the kernel implies
+    * @return variance of the white noise presumed by the kernel
     */
-  def iidNoise: Double
+  def whiteNoiseVar: Double
+}
+
+/**
+  * Many kernels do not presume any white noise. The trait provides an implementation of `whiteNoiseVar` for them.
+  */
+trait NoiselessKernel extends Kernel {
+  override def whiteNoiseVar: Double = 0
 }
 
 class TrainingVectorsNotInitializedException
@@ -120,7 +127,7 @@ trait TrainDatasetBearingKernel extends Kernel {
   */
 class RBFKernel(private var sigma: Double,
                 private val lower: Double = 1e-6,
-                private val upper: Double = inf) extends TrainDatasetBearingKernel {
+                private val upper: Double = inf) extends TrainDatasetBearingKernel with NoiselessKernel {
   def this() = this(1)
 
   override def setHyperparameters(value: BDV[Double]): RBFKernel.this.type = {
@@ -181,8 +188,6 @@ class RBFKernel(private var sigma: Double,
     result
   }
 
-  override def iidNoise: Double = 0
-
   override def trainingKernelDiag(): Array[Double] = getTrainingVectors.map(_ => 1d)
 
   private def sqr(x: Double) = x * x
@@ -205,7 +210,7 @@ class RBFKernel(private var sigma: Double,
   */
 class ARDRBFKernel(private var beta: BDV[Double],
                    private val lower: BDV[Double],
-                   private val upper: BDV[Double]) extends TrainDatasetBearingKernel {
+                   private val upper: BDV[Double]) extends TrainDatasetBearingKernel with NoiselessKernel {
 
   def this(beta: BDV[Double]) = this(beta, beta * 0d, beta * inf)
 
@@ -276,8 +281,6 @@ class ARDRBFKernel(private var beta: BDV[Double],
 
     result
   }
-
-  override def iidNoise: Double = 0
 }
 
 class EyeKernel extends TrainDatasetBearingKernel {
@@ -301,7 +304,7 @@ class EyeKernel extends TrainDatasetBearingKernel {
 
   override def crossKernel(test: Array[Vector]): BDM[Double] = BDM.zeros[Double](test.length, getTrainingVectors.length)
 
-  override def iidNoise: Double = 1
+  override def whiteNoiseVar: Double = 1
 }
 
 object WhiteNoiseKernel {
