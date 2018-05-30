@@ -92,22 +92,19 @@ class TrainingVectorsNotInitializedException
   * @param lower
   * @param upper
   */
-class RBFKernel(sigma: Double,
+class RBFKernel(private var sigma: Double,
                 private val lower: Double = 1e-6,
                 private val upper: Double = inf) extends Kernel {
-  private var hyperparameters : BDV[Double] = BDV[Double](sigma)
-
   override def setHyperparameters(value: BDV[Double]): RBFKernel.this.type = {
-    hyperparameters = value
+    sigma = value(0)
     this
   }
 
-  override def getHyperparameters: BDV[Double] = hyperparameters
-
+  override def getHyperparameters: BDV[Double] = BDV[Double](sigma)
 
   override def numberOfHyperparameters: Int = 1
 
-  private def getSigma() = hyperparameters(0)
+  private def getSigma() = sigma
 
   private var squaredDistances: Option[BDM[Double]] = None
 
@@ -170,24 +167,26 @@ class RBFKernel(sigma: Double,
   private def sqr(x: Double) = x * x
 
   private def cube(x: Double) = x * x * x
+
+
 }
 
 
-class ARDRBFKernel(private var hyperparameters: BDV[Double],
+class ARDRBFKernel(private var beta: BDV[Double],
                    private val lower: BDV[Double],
                    private val upper: BDV[Double]) extends Kernel {
 
-  def this(hyperparameters: BDV[Double]) = this(hyperparameters, hyperparameters * 0d, hyperparameters * inf)
+  def this(beta: BDV[Double]) = this(beta, beta * 0d, beta * inf)
 
   override def setHyperparameters(value: BDV[Double]): ARDRBFKernel.this.type = {
-    hyperparameters = value
+    beta = value
     this
   }
 
-  override def getHyperparameters: BDV[Double] = hyperparameters
+  override def getHyperparameters: BDV[Double] = beta
 
 
-  override def numberOfHyperparameters: Int = hyperparameters.length
+  override def numberOfHyperparameters: Int = beta.length
 
   def this(p : Int, beta: Double = 1, lower: Double = 0, upper : Double = inf) =
     this(BDV.zeros[Double](p) + beta,
@@ -206,7 +205,7 @@ class ARDRBFKernel(private var hyperparameters: BDV[Double],
   }
 
   private def kernelElement(a: BV[Double], b: BV[Double]) : Double = {
-    val weightedDistance = norm((a - b) *:* hyperparameters)
+    val weightedDistance = norm((a - b) *:* beta)
     exp(- weightedDistance * weightedDistance)
   }
 
@@ -232,14 +231,14 @@ class ARDRBFKernel(private var hyperparameters: BDV[Double],
     val train = trainOption.getOrElse(throw new TrainingVectorsNotInitializedException)
     val K = trainingKernel()
     val minus2Kernel = -2d * K
-    val result = Array.fill[BDM[Double]](hyperparameters.length)(BDM.zeros[Double](train.length, train.length))
+    val result = Array.fill[BDM[Double]](beta.length)(BDM.zeros[Double](train.length, train.length))
 
     for (i <- train.indices; j <- 0 to i) {
       val diff = train(i).asBreeze - train(j).asBreeze
       diff :*= diff
-      diff :*= hyperparameters
+      diff :*= beta
       val betaXi_Xj = diff
-      for (k <- 0 until hyperparameters.length) {
+      for (k <- 0 until beta.length) {
         result(k)(i, j) = betaXi_Xj(k)
         result(k)(j, i) = betaXi_Xj(k)
       }
