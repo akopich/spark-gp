@@ -4,9 +4,7 @@ import breeze.linalg._
 import breeze.numerics._
 import org.apache.spark.ml.feature.LabeledPoint
 import org.apache.spark.ml.linalg.Vectors
-import org.apache.spark.ml.regression.kernel.ScalarTimesKernel._
-import org.apache.spark.ml.regression.kernel.SummableKernel._
-import org.apache.spark.ml.regression.kernel.{RBFKernel, WhiteNoiseKernel}
+import org.apache.spark.ml.regression.kernel.{RBFKernel, WhiteNoiseKernel, _}
 import org.apache.spark.ml.regression.{GaussianProcessRegression, RandomActiveSetProvider}
 
 object Synthetics extends App with GPExample {

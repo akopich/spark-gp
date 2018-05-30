@@ -56,6 +56,3 @@ class SummableKernel private[kernel](private val kernel: Kernel) {
   def +(other: Kernel) = new SumOfKernels(kernel, other)
 }
 
-object SummableKernel {
-  implicit def toSummable(kernel: Kernel) = new SummableKernel(kernel)
-}

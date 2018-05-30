@@ -266,3 +266,4 @@ trait GaussianProcessRegressionHelper {
       throw new NotPositiveDefiniteException
   }
 }
+

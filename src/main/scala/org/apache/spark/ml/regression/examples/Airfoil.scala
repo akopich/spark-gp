@@ -5,11 +5,8 @@ import breeze.numerics.sqrt
 import org.apache.spark.ml.feature.LabeledPoint
 import org.apache.spark.ml.linalg.Vectors
 import org.apache.spark.ml.regression.GaussianProcessRegression
-import org.apache.spark.ml.regression.kernel.ScalarTimesKernel._
-import org.apache.spark.ml.regression.kernel.SummableKernel._
-import org.apache.spark.ml.regression.kernel.{ARDRBFKernel, WhiteNoiseKernel}
+import org.apache.spark.ml.regression.kernel.{ARDRBFKernel, WhiteNoiseKernel, _}
 import org.apache.spark.rdd.RDD
-
 
 object Airfoil extends App with GPExample {
   import spark.sqlContext.implicits._

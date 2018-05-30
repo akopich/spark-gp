@@ -70,7 +70,3 @@ class Scalar private[kernel](private val C: Double,
 
   def below(newUpper: Double) = new Scalar(C, lower, newUpper)
 }
-
-object ScalarTimesKernel {
-  implicit def toScalar(C: Double) = new Scalar(C)
-}
