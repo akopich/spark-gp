@@ -5,7 +5,7 @@ import org.apache.spark.ml.linalg
 
 class ScalarTimesKernel(private val kernel: Kernel,
                         private var C: Double,
-                        private val Clower: Double = 1e-6,
+                        private val Clower: Double = 0,
                         private val Cupper: Double = inf) extends Kernel {
 
   override def getHyperparameters: BDV[Double] = prependToVector(C, kernel.getHyperparameters)
@@ -47,8 +47,26 @@ class ScalarTimesKernel(private val kernel: Kernel,
   override def iidNoise: Double = C * kernel.iidNoise
 }
 
-class Scalar private[kernel](private val C : Double) extends AnyVal {
-  def *(kernel : Kernel) = new ScalarTimesKernel(kernel, C)
+class Scalar private[kernel](private val C: Double,
+                             private val lower: Double = 0,
+                             private val upper: Double = inf) {
+  def *(kernel : Kernel) = new ScalarTimesKernel(kernel, C, lower, upper)
+
+  /**
+    * Untended use is
+    * `1 between 0 and 30`
+    * which means "create a scalar with initial value of 1 which should be optimized in the range from 0 to 30"
+    *
+    * @param lower
+    * @return
+    */
+  def between(lower: Double) = new AnyRef {
+    private val low: Double = lower
+
+    def and(upper: Double) = new Scalar(C, low, upper)
+  }
+
+  def below(newUpper: Double) = new Scalar(C, lower, newUpper)
 }
 
 object ScalarTimesKernel {

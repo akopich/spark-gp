@@ -7,7 +7,7 @@ import org.apache.spark.ml.linalg.Vectors
 import org.apache.spark.ml.regression.GaussianProcessRegression
 import org.apache.spark.ml.regression.kernel.ScalarTimesKernel._
 import org.apache.spark.ml.regression.kernel.SummableKernel._
-import org.apache.spark.ml.regression.kernel.{EyeKernel, RBFKernel}
+import org.apache.spark.ml.regression.kernel.{ARDRBFKernel, WhiteNoiseKernel}
 import org.apache.spark.rdd.RDD
 
 
@@ -23,9 +23,9 @@ object Airfoil extends App with GPExample {
   val gp = new GaussianProcessRegression()
     .setActiveSetSize(1000)
     .setSigma2(1e-4)
-    .setKernel(() => 1 * new RBFKernel(5) + 1 * new EyeKernel)
+    .setKernel(() => 1 * new ARDRBFKernel(5) + WhiteNoiseKernel(1, 0, 15))
 
-  cv(gp, scaled, 4.1) //2.8 for ARDRBF
+  cv(gp, scaled, 4.11) //2.8 for ARDRBF
 
   def readSCV(path : String) = {
     spark.read.format("csv").load(path).rdd.map(row => {

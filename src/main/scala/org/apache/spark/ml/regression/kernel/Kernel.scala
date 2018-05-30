@@ -3,6 +3,7 @@ package org.apache.spark.ml.regression.kernel
 import breeze.linalg.{Transpose, norm, DenseMatrix => BDM, DenseVector => BDV, Vector => BV}
 import breeze.numerics._
 import org.apache.spark.ml.linalg.{Vector, Vectors}
+import org.apache.spark.ml.regression.kernel.ScalarTimesKernel._
 
 /**
   * Trait defining the covariance function `k` of a Gaussian Process
@@ -303,3 +304,7 @@ class EyeKernel extends TrainDatasetBearingKernel {
   override def iidNoise: Double = 1
 }
 
+object WhiteNoiseKernel {
+  def apply(initial: Double, lower: Double, upper: Double): Kernel =
+    (initial between lower and upper) * new EyeKernel
+}
