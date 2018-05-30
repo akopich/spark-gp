@@ -115,11 +115,10 @@ class GaussianProcessRegression(override val uid: String)
 
     expertLabelsAndKernels.unpersist()
 
-    val optimalKernel = $(kernel)().setTrainingVectors(activeSet)
-      .setHyperparameters(optimalHyperparameters)
+    val optimalKernel = $(kernel)().setTrainingVectors(activeSet).setHyperparameters(optimalHyperparameters)
 
     // inv(sigma^2 K_mm + K_mn * K_nm) * K_mn * y
-    val magicVector = getMagicVector(optimalKernel, $(sigma2) + optimalKernel.whiteNoiseVar,
+    val magicVector = getMagicVector(optimalKernel, $(sigma2),
       matrixKmnKnm, vectorKmny, activeSet, optimalHyperparameters)
 
     val model = new GaussianProcessRegressionModel(uid, magicVector, optimalKernel)
@@ -196,8 +195,7 @@ class GaussianProcessRegressionModel private[regression](override val uid: Strin
   }
 
   override def copy(extra: ParamMap): GaussianProcessRegressionModel = {
-    val newModel = copyValues(new GaussianProcessRegressionModel(uid,
-      magicVector, kernel), extra)
+    val newModel = copyValues(new GaussianProcessRegressionModel(uid, magicVector, kernel), extra)
     newModel.setParent(parent)
   }
 }
@@ -253,7 +251,7 @@ trait GaussianProcessRegressionHelper {
     val Kmm = kernel.trainingKernel()
     regularizeMatrix(Kmm, sigma2)
 
-    val positiveDefiniteMatrix = sigma2 * Kmm + matrixKmnKnm  // sigma^2 K_mm + K_mn * K_nm
+    val positiveDefiniteMatrix = (sigma2 + kernel.whiteNoiseVar) * Kmm + matrixKmnKnm  // sigma^2 K_mm + K_mn * K_nm
     assertSymPositiveDefinite(positiveDefiniteMatrix)
     positiveDefiniteMatrix \ vectorKmny
   }
