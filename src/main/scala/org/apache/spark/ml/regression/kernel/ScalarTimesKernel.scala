@@ -18,14 +18,14 @@ class ScalarTimesKernel(private val kernel: Kernel,
 
   override def numberOfHyperparameters: Int = 1 + kernel.numberOfHyperparameters
 
-  private def prependToVector(c : Double, v : BDV[Double]) = BDV[Double](c +: v.data)
+  private def prependToVector(c : Double, v : BDV[Double]) = BDV[Double](c +: v.toArray)
 
   override def hyperparameterBoundaries: (BDV[Double], BDV[Double]) = {
     val (lower, upper) = kernel.hyperparameterBoundaries
     (prependToVector(Clower, lower), prependToVector(Cupper, upper))
   }
 
-  override def getTrainingVectors(): Array[linalg.Vector] = kernel.getTrainingVectors
+  override def getTrainingVectors: Array[linalg.Vector] = kernel.getTrainingVectors
 
   override def setTrainingVectors(vectors: Array[linalg.Vector]): ScalarTimesKernel.this.type = {
     kernel.setTrainingVectors(vectors)
@@ -43,6 +43,8 @@ class ScalarTimesKernel(private val kernel: Kernel,
   }
 
   override def crossKernel(test: Array[linalg.Vector]): DenseMatrix[Double] = C * kernel.crossKernel(test)
+
+  override def iidNoise: Double = C * kernel.iidNoise
 }
 
 class Scalar private[kernel](private val C : Double) extends AnyVal {

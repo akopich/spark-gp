@@ -83,6 +83,12 @@ trait Kernel extends Serializable {
     val k = crossKernel(Array(test))
     k(0, ::)
   }
+
+  /**
+    *
+    * @return how much of i.i.d. noise the kernel implies
+    */
+  def iidNoise: Double
 }
 
 class TrainingVectorsNotInitializedException
@@ -174,16 +180,13 @@ class RBFKernel(private var sigma: Double,
     result
   }
 
+  override def iidNoise: Double = 0
 
-  override def trainingKernelDiag(): Array[Double] = {
-    getTrainingVectors.map(_ => 1d)
-  }
+  override def trainingKernelDiag(): Array[Double] = getTrainingVectors.map(_ => 1d)
 
   private def sqr(x: Double) = x * x
 
   private def cube(x: Double) = x * x * x
-
-
 }
 
 /**
@@ -272,4 +275,31 @@ class ARDRBFKernel(private var beta: BDV[Double],
 
     result
   }
+
+  override def iidNoise: Double = 0
 }
+
+class EyeKernel extends TrainDatasetBearingKernel {
+  override def getHyperparameters: BDV[Double] = BDV[Double]()
+
+  override def setHyperparameters(value: BDV[Double]): EyeKernel.this.type = this
+
+  override def numberOfHyperparameters: Int = 0
+
+  override def hyperparameterBoundaries: (BDV[Double], BDV[Double]) = (BDV[Double](), BDV[Double]())
+
+  override def trainingKernel(): BDM[Double] = BDM.eye[Double](getTrainingVectors.length)
+
+  override def trainingKernelDiag(): Array[Double] = {
+    getTrainingVectors.map(_ => 1d)
+  }
+
+  override def trainingKernelAndDerivative(): (BDM[Double], Array[BDM[Double]]) = {
+    (trainingKernel(), Array[BDM[Double]]())
+  }
+
+  override def crossKernel(test: Array[Vector]): BDM[Double] = BDM.zeros[Double](test.length, getTrainingVectors.length)
+
+  override def iidNoise: Double = 1
+}
+

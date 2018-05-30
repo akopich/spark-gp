@@ -119,7 +119,7 @@ class GaussianProcessRegression(override val uid: String)
       .setHyperparameters(optimalHyperparameters)
 
     // inv(sigma^2 K_mm + K_mn * K_nm) * K_mn * y
-    val magicVector = getMagicVector(optimalKernel, $(sigma2),
+    val magicVector = getMagicVector(optimalKernel, $(sigma2) + optimalKernel.iidNoise,
       matrixKmnKnm, vectorKmny, activeSet, optimalHyperparameters)
 
     val model = new GaussianProcessRegressionModel(uid, magicVector, optimalKernel)

@@ -4,7 +4,7 @@ import org.apache.spark.ml.linalg
 
 class SumOfKernels(private val kernel1: Kernel,
                    private val kernel2: Kernel) extends Kernel {
-  private def concat(v: BDV[Double], u: BDV[Double]) = BDV[Double](v.data ++ u.data)
+  private def concat(v: BDV[Double], u: BDV[Double]) = BDV[Double](v.toArray ++ u.toArray)
 
   override def getHyperparameters: BDV[Double] =
     concat(kernel1.getHyperparameters, kernel2.getHyperparameters)
@@ -46,6 +46,8 @@ class SumOfKernels(private val kernel1: Kernel,
 
   override def crossKernel(test: Array[linalg.Vector]): DenseMatrix[Double] =
     kernel1.crossKernel(test) + kernel2.crossKernel(test)
+
+  override def iidNoise: Double = kernel1.iidNoise + kernel2.iidNoise
 }
 
 class SummableKernel private[kernel](private val kernel: Kernel) {
