@@ -193,6 +193,8 @@ class RBFKernel(private var sigma: Double,
   private def sqr(x: Double) = x * x
 
   private def cube(x: Double) = x * x * x
+
+  override def toString = s"RBFKernel(sigma=$sigma)"
 }
 
 /**
@@ -281,6 +283,8 @@ class ARDRBFKernel(private var beta: BDV[Double],
 
     result
   }
+
+  override def toString = s"ARDRBFKernel(beta=$beta)"
 }
 
 class EyeKernel extends TrainDatasetBearingKernel {
@@ -305,6 +309,9 @@ class EyeKernel extends TrainDatasetBearingKernel {
   override def crossKernel(test: Array[Vector]): BDM[Double] = BDM.zeros[Double](test.length, getTrainingVectors.length)
 
   override def whiteNoiseVar: Double = 1
+
+
+  override def toString = "I"
 }
 
 object WhiteNoiseKernel {

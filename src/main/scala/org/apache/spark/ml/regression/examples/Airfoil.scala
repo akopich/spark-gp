@@ -25,7 +25,7 @@ object Airfoil extends App with GPExample {
     .setSigma2(1e-4)
     .setKernel(() => 1 * new ARDRBFKernel(5) + WhiteNoiseKernel(1, 0, 15))
 
-  cv(gp, scaled, 4.11) //2.8 for ARDRBF
+  cv(gp, scaled, 3.5)
 
   def readSCV(path : String) = {
     spark.read.format("csv").load(path).rdd.map(row => {

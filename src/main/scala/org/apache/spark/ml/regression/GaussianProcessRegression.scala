@@ -102,7 +102,8 @@ class GaussianProcessRegression(override val uid: String)
 
     instr.log("Optimising the kernel hyperparameters")
     val optimalHyperparameters = optimizeHyperparameters(expertLabelsAndKernels, $(sigma2))
-    instr.log("Optimal hyperparameter values: " + optimalHyperparameters )
+    val optimalKernel = $(kernel)().setHyperparameters(optimalHyperparameters)
+    instr.log("Optimal kernel: " + optimalKernel)
 
     expertLabelsAndKernels.foreach(_._2.setHyperparameters(optimalHyperparameters))
 
@@ -115,7 +116,7 @@ class GaussianProcessRegression(override val uid: String)
 
     expertLabelsAndKernels.unpersist()
 
-    val optimalKernel = $(kernel)().setTrainingVectors(activeSet).setHyperparameters(optimalHyperparameters)
+    optimalKernel.setTrainingVectors(activeSet)
 
     // inv(sigma^2 K_mm + K_mn * K_nm) * K_mn * y
     val magicVector = getMagicVector(optimalKernel, $(sigma2),

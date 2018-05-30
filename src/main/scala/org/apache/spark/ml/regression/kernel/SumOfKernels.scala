@@ -48,6 +48,8 @@ class SumOfKernels(private val kernel1: Kernel,
     kernel1.crossKernel(test) + kernel2.crossKernel(test)
 
   override def whiteNoiseVar: Double = kernel1.whiteNoiseVar + kernel2.whiteNoiseVar
+
+  override def toString: String = s"$kernel1 + $kernel2"
 }
 
 class SummableKernel private[kernel](private val kernel: Kernel) {
