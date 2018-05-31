@@ -23,7 +23,7 @@ trait ScalarTimesKernel extends Kernel {
 
   override def whiteNoiseVar: Double = C * kernel.whiteNoiseVar
 
-  override def toString = s"$C * $kernel"
+  override def toString = if (C != 0) s"$C * $kernel" else ""
 }
 
 class ConstantTimesKernel(protected val kernel: Kernel, protected val C: Double) extends ScalarTimesKernel {
