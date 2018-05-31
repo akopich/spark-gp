@@ -246,9 +246,10 @@ trait GaussianProcessRegressionHelper {
                      vectorKmny: BDV[Double],
                      activeSet: Array[Vector],
                      optimalHyperparameter: BDV[Double]) = {
-    val Kmm = kernel.trainingKernel() //TODO: OPTIMIZE?
+    val positiveDefiniteMatrix = kernel.trainingKernel() //K_mm
+    positiveDefiniteMatrix *= kernel.whiteNoiseVar // sigma^2 K_mm
+    positiveDefiniteMatrix += matrixKmnKnm // sigma^2 K_mm + K_mn * K_nm
 
-    val positiveDefiniteMatrix = kernel.whiteNoiseVar * Kmm + matrixKmnKnm  // sigma^2 K_mm + K_mn * K_nm
     assertSymPositiveDefinite(positiveDefiniteMatrix)
     positiveDefiniteMatrix \ vectorKmny
   }
