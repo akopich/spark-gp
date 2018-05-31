@@ -34,7 +34,11 @@ class ConstantTimesKernel(protected val kernel: Kernel, protected val C: Double)
     this
   }
 
-  override def trainingKernelAndDerivative(): (BDM[Double], Array[BDM[Double]]) = kernel.trainingKernelAndDerivative()
+  override def trainingKernelAndDerivative(): (BDM[Double], Array[BDM[Double]]) = {
+    val (kernelMatrix, derivative) = kernel.trainingKernelAndDerivative()
+
+    (kernelMatrix * C, derivative.map(_ * C))
+  }
 
   override def numberOfHyperparameters: Int = kernel.numberOfHyperparameters
 

@@ -20,9 +20,9 @@ object Airfoil extends App with GPExample {
   val gp = new GaussianProcessRegression()
     .setActiveSetSize(1000)
     .setSigma2(1e-4)
-    .setKernel(() => 1 * new ARDRBFKernel(5) + 10.const * new EyeKernel)
+    .setKernel(() => 1 * new ARDRBFKernel(5) + 1.const * new EyeKernel)
 
-  cv(gp, scaled, 2.3)
+  cv(gp, scaled, 2.1)
 
   def readSCV(path : String) = {
     spark.read.format("csv").load(path).rdd.map(row => {
