@@ -49,7 +49,7 @@ class SumOfKernels(private val kernel1: Kernel,
 
   override def whiteNoiseVar: Double = kernel1.whiteNoiseVar + kernel2.whiteNoiseVar
 
-  override def toString: String = List(kernel1.toString, kernel2.toString).filter(_.length > 0).mkString(" + ")
+  override def toString: String = List(kernel1, kernel2).map(_.toString).filter(_.length > 0).mkString(" + ")
 }
 
 class SummableKernel private[kernel](private val kernel: Kernel) {
