@@ -5,7 +5,7 @@ import breeze.numerics.sqrt
 import org.apache.spark.ml.feature.LabeledPoint
 import org.apache.spark.ml.linalg.Vectors
 import org.apache.spark.ml.regression.GaussianProcessRegression
-import org.apache.spark.ml.regression.kernel.{ARDRBFKernel, WhiteNoiseKernel, _}
+import org.apache.spark.ml.regression.kernel.{ARDRBFKernel, _}
 import org.apache.spark.rdd.RDD
 
 object Airfoil extends App with GPExample {
@@ -20,9 +20,9 @@ object Airfoil extends App with GPExample {
   val gp = new GaussianProcessRegression()
     .setActiveSetSize(1000)
     .setSigma2(1e-4)
-    .setKernel(() => 1 * new ARDRBFKernel(5) + WhiteNoiseKernel(1, 0, 15))
+    .setKernel(() => 1 * new ARDRBFKernel(5) + 10.const * new EyeKernel)
 
-  cv(gp, scaled, 3.5)
+  cv(gp, scaled, 2.3)
 
   def readSCV(path : String) = {
     spark.read.format("csv").load(path).rdd.map(row => {
