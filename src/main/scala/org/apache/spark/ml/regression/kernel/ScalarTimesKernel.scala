@@ -4,6 +4,8 @@ import breeze.numerics._
 import org.apache.spark.ml.linalg
 
 trait ScalarTimesKernel extends Kernel {
+  require(C >= 0, "C should be positive")
+
   protected val kernel: Kernel
 
   protected def C: Double
@@ -26,6 +28,14 @@ trait ScalarTimesKernel extends Kernel {
   override def toString = if (C != 0) f"$C%1.1e * $kernel" else ""
 }
 
+/**
+  * This implements a kernel multiplied by some non-negative constant.
+  *
+  * k'(x_1, x_2) = C * k(x_1, x_2). The parameter C is not trainable.
+  *
+  * @param kernel
+  * @param C
+  */
 class ConstantTimesKernel(protected val kernel: Kernel, protected val C: Double) extends ScalarTimesKernel {
   override def getHyperparameters: BDV[Double] = kernel.getHyperparameters
 
@@ -45,6 +55,16 @@ class ConstantTimesKernel(protected val kernel: Kernel, protected val C: Double)
   override def hyperparameterBoundaries: (BDV[Double], BDV[Double]) = kernel.hyperparameterBoundaries
 }
 
+/**
+  * This implements a kernel multiplied by some non-negative value.
+  *
+  * k'(x_1, x_2) = C * k(x_1, x_2). The parameter C is trainable.
+  *
+  * @param kernel
+  * @param C
+  * @param Clower the value C should exceed
+  * @param Cupper the value C should not exceed
+  */
 class TrainableScalarTimesKernel(protected val kernel: Kernel,
                                  protected var C: Double,
                                  private val Clower: Double = 0,

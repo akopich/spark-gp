@@ -2,6 +2,16 @@ package org.apache.spark.ml.regression.kernel
 import breeze.linalg.{DenseMatrix, DenseVector => BDV}
 import org.apache.spark.ml.linalg
 
+/**
+  * The class implements a kernel which is a sum of kernels.
+  *
+  * k'(x_1, x_2) = k_1(x_1, x_2) + k_2(x_1, x_2)
+  *
+  * The kernels are assumed to have no shared hyperparameters.
+  *
+  * @param kernel1
+  * @param kernel2
+  */
 class SumOfKernels(private val kernel1: Kernel,
                    private val kernel2: Kernel) extends Kernel {
   private def concat(v: BDV[Double], u: BDV[Double]) = BDV[Double](v.toArray ++ u.toArray)
