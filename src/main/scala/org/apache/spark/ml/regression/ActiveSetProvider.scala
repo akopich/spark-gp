@@ -13,7 +13,6 @@ trait ActiveSetProvider extends Serializable {
             points: RDD[LabeledPoint],
             kernel: () => Kernel,
             optimalHyperparameter: BDV[Double],
-            sigma2: Double,
             seed : Long) : Array[Vector]
 }
 
@@ -26,7 +25,6 @@ object RandomActiveSetProvider extends ActiveSetProvider {
                      points: RDD[LabeledPoint],
                      kernel: () => Kernel,
                      optimalHyperparameter: BDV[Double],
-                     sigma2: Double,
                      seed: Long): Array[Vector] =
     points.takeSample(withReplacement = false, activeSetSize, seed).map(_.features)
 }
@@ -42,15 +40,14 @@ object GreedilyOptimizingActiveSetProvider extends ActiveSetProvider with Gaussi
                       points: RDD[LabeledPoint],
                       kernel: () => Kernel,
                       optimalHyperparameter: BDV[Double],
-                      sigma2: Double,
                       seed : Long) : Array[Vector] = {
     var activeSet = points.takeSample(withReplacement = false, 1, seed).map(_.features)
 
     while (activeSet.length <  activeSetSize) {
-      val Kmm = kernel().setHyperparameters(optimalHyperparameter).setTrainingVectors(activeSet).trainingKernel()
-      regularizeMatrix(Kmm, sigma2)
+      val kernelInstance = kernel().setHyperparameters(optimalHyperparameter).setTrainingVectors(activeSet)
+      val Kmm = kernelInstance.trainingKernel()
       val activeSetBC = points.sparkContext.broadcast(activeSet)
-      val next = getNext(Kmm, expertLabelsAndKernels, activeSetBC, sigma2)
+      val next = getNext(Kmm, expertLabelsAndKernels, activeSetBC, kernelInstance.whiteNoiseVar)
       activeSet :+= next
       activeSetBC.destroy()
     }

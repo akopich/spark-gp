@@ -8,7 +8,7 @@ import org.apache.spark.ml.feature.LabeledPoint
 import org.apache.spark.ml.linalg.Vector
 import org.apache.spark.ml.param.shared._
 import org.apache.spark.ml.param.{DoubleParam, IntParam, Param, ParamMap}
-import org.apache.spark.ml.regression.kernel.{Kernel, RBFKernel}
+import org.apache.spark.ml.regression.kernel.{EyeKernel, Kernel, RBFKernel, _}
 import org.apache.spark.ml.util.{Identifiable, Instrumentation}
 import org.apache.spark.rdd.RDD
 import org.apache.spark.sql.functions.col
@@ -90,6 +90,8 @@ class GaussianProcessRegression(override val uid: String)
 
   def this() = this(Identifiable.randomUID("gaussProcessReg"))
 
+  private val getKernel : () => Kernel = () => $(kernel)() + $(sigma2).const * new EyeKernel
+
   override protected def train(dataset: Dataset[_]): GaussianProcessRegressionModel = {
     val instr = Instrumentation.create(this, dataset)
 
@@ -97,18 +99,18 @@ class GaussianProcessRegression(override val uid: String)
 
     val expertLabelsAndKernels: RDD[(BDV[Double], Kernel)] = groupForExperts(points).map { chunk =>
       val (labels, trainingVectors) = chunk.map(lp => (lp.label, lp.features)).toArray.unzip
-      (BDV(labels: _*), $(kernel)().setTrainingVectors(trainingVectors))
+      (BDV(labels: _*), getKernel().setTrainingVectors(trainingVectors))
     }.cache()
 
     instr.log("Optimising the kernel hyperparameters")
-    val optimalHyperparameters = optimizeHyperparameters(expertLabelsAndKernels, $(sigma2))
-    val optimalKernel = $(kernel)().setHyperparameters(optimalHyperparameters)
+    val optimalHyperparameters = optimizeHyperparameters(expertLabelsAndKernels)
+    val optimalKernel = getKernel().setHyperparameters(optimalHyperparameters)
     instr.log("Optimal kernel: " + optimalKernel)
 
     expertLabelsAndKernels.foreach(_._2.setHyperparameters(optimalHyperparameters))
 
     val activeSet = $(activeSetProvider)($(activeSetSize), expertLabelsAndKernels, points,
-      $(kernel), optimalHyperparameters, $(sigma2), $(seed))
+      getKernel, optimalHyperparameters, $(seed))
 
     points.unpersist()
 
@@ -119,8 +121,7 @@ class GaussianProcessRegression(override val uid: String)
     optimalKernel.setTrainingVectors(activeSet)
 
     // inv(sigma^2 K_mm + K_mn * K_nm) * K_mn * y
-    val magicVector = getMagicVector(optimalKernel, $(sigma2),
-      matrixKmnKnm, vectorKmny, activeSet, optimalHyperparameters)
+    val magicVector = getMagicVector(optimalKernel, matrixKmnKnm, vectorKmny, activeSet, optimalHyperparameters)
 
     val model = new GaussianProcessRegressionModel(uid, magicVector, optimalKernel)
     instr.logSuccess(model)
@@ -133,8 +134,7 @@ class GaussianProcessRegression(override val uid: String)
     }
   }
 
-  private def optimizeHyperparameters(expertLabelsAndKernels: RDD[(BDV[Double], Kernel)],
-                                      sigma2: Double) = {
+  private def optimizeHyperparameters(expertLabelsAndKernels: RDD[(BDV[Double], Kernel)]) = {
     val f = new DiffFunction[BDV[Double]] with Serializable {
       private val cache = mutable.HashMap[BDV[Double], (Double, BDV[Double])]()
 
@@ -145,7 +145,7 @@ class GaussianProcessRegression(override val uid: String)
       private def calculateNoMemory(x: BDV[Double]): (Double, BDV[Double]) = {
         expertLabelsAndKernels.treeAggregate((0d, BDV.zeros[Double](x.length)))({ case (u, (y, k)) =>
           k.setHyperparameters(x)
-          val (likelihood, gradient) = likelihoodAndGradient(y, k, sigma2)
+          val (likelihood, gradient) = likelihoodAndGradient(y, k)
           (u._1 + likelihood, u._2 += gradient)
         }, { case (u, v) =>
           (u._1 + v._1, u._2 += v._2)
@@ -153,16 +153,15 @@ class GaussianProcessRegression(override val uid: String)
       }
     }
 
-    val x0 = $(kernel)().getHyperparameters
-    val (lower, upper) = $(kernel)().hyperparameterBoundaries
+    val x0 = getKernel().getHyperparameters
+    val (lower, upper) = getKernel().hyperparameterBoundaries
     val solver = new LBFGSB(lower, upper, maxIter = $(maxIter), tolerance = $(tol))
 
     solver.minimize(f, x0)
   }
 
-  private def likelihoodAndGradient(y: BDV[Double], kernel : Kernel, sigma2: Double) = {
+  private def likelihoodAndGradient(y: BDV[Double], kernel : Kernel) = {
     val (k, derivative) = kernel.trainingKernelAndDerivative()
-    regularizeMatrix(k, sigma2)
     val Kinv = inv(k)
     val alpha = Kinv * y
     val likelihood = 0.5 * (y.t * alpha) + 0.5 * logdet(k)._2
@@ -235,8 +234,7 @@ trait GaussianProcessRegressionHelper {
     * Computes inv(sigma^2^ K_mm + K_mn * K_nm) * K_mn * y
     *
     * @param kernel Should be fully initialized: both `setHyperparameters` and `setTrainingVectors`
-    *               should called beforehand
-    * @param sigma2
+    *               should be called beforehand
     * @param matrixKmnKnm
     * @param vectorKmny
     * @param activeSet
@@ -244,21 +242,15 @@ trait GaussianProcessRegressionHelper {
     * @return
     */
   def getMagicVector(kernel: Kernel,
-                     sigma2: Double,
                      matrixKmnKnm: BDM[Double],
                      vectorKmny: BDV[Double],
                      activeSet: Array[Vector],
                      optimalHyperparameter: BDV[Double]) = {
-    val Kmm = kernel.trainingKernel()
-    regularizeMatrix(Kmm, sigma2)
+    val Kmm = kernel.trainingKernel() //TODO: OPTIMIZE?
 
-    val positiveDefiniteMatrix = (sigma2 + kernel.whiteNoiseVar) * Kmm + matrixKmnKnm  // sigma^2 K_mm + K_mn * K_nm
+    val positiveDefiniteMatrix = kernel.whiteNoiseVar * Kmm + matrixKmnKnm  // sigma^2 K_mm + K_mn * K_nm
     assertSymPositiveDefinite(positiveDefiniteMatrix)
     positiveDefiniteMatrix \ vectorKmny
-  }
-
-  protected def regularizeMatrix(matrix : BDM[Double], regularization: Double) : Unit = {
-    for (i <- 0 until matrix.cols) matrix(i, i) += regularization
   }
 
   protected def assertSymPositiveDefinite(matrix: BDM[Double]): Unit = {
