@@ -15,11 +15,11 @@ trait ScalarTimesKernel extends Kernel {
     this
   }
 
-  override def trainingKernel(): BDM[Double] = kernel.trainingKernel() * C
+  override def trainingKernel(): BDM[Double] = kernel.trainingKernel() *= C
 
   override def trainingKernelDiag(): Array[Double] = kernel.trainingKernelDiag().map(_ * C)
 
-  override def crossKernel(test: Array[linalg.Vector]): BDM[Double] = C * kernel.crossKernel(test)
+  override def crossKernel(test: Array[linalg.Vector]): BDM[Double] = kernel.crossKernel(test) *= C
 
   override def whiteNoiseVar: Double = C * kernel.whiteNoiseVar
 
@@ -37,7 +37,7 @@ class ConstantTimesKernel(protected val kernel: Kernel, protected val C: Double)
   override def trainingKernelAndDerivative(): (BDM[Double], Array[BDM[Double]]) = {
     val (kernelMatrix, derivative) = kernel.trainingKernelAndDerivative()
 
-    (kernelMatrix * C, derivative.map(_ * C))
+    (kernelMatrix * C, derivative.map(_ *= C))
   }
 
   override def numberOfHyperparameters: Int = kernel.numberOfHyperparameters
@@ -70,7 +70,7 @@ class TrainableScalarTimesKernel(protected val kernel: Kernel,
   override def trainingKernelAndDerivative(): (BDM[Double], Array[BDM[Double]]) = {
     val (kernelMatrix, derivative) = kernel.trainingKernelAndDerivative()
 
-    (kernelMatrix * C, kernelMatrix +: derivative.map(_ * C))
+    (kernelMatrix * C, kernelMatrix +: derivative.map(_ *= C))
   }
 }
 
