@@ -193,7 +193,7 @@ class RBFKernel(private var sigma: Double,
 
   private def cube(x: Double) = x * x * x
 
-  override def toString = s"RBFKernel(sigma=$sigma)"
+  override def toString = f"RBFKernel(sigma=$sigma%1.1e)"
 }
 
 /**
@@ -283,7 +283,9 @@ class ARDRBFKernel(private var beta: BDV[Double],
     result
   }
 
-  override def toString = s"ARDRBFKernel(beta=$beta)"
+  override def toString = "ARDRBFKernel(beta=" + BDV2String(beta) + ")"
+
+  private def BDV2String(v : BDV[Double]) = v.valuesIterator.map(e => f"$e%1.1e").mkString("[", ", " , "]")
 }
 
 /**
