@@ -286,6 +286,9 @@ class ARDRBFKernel(private var beta: BDV[Double],
   override def toString = s"ARDRBFKernel(beta=$beta)"
 }
 
+/**
+  * Identity matrix kernel.
+  */
 class EyeKernel extends TrainDatasetBearingKernel {
   override def getHyperparameters: BDV[Double] = BDV[Double]()
 
@@ -308,7 +311,6 @@ class EyeKernel extends TrainDatasetBearingKernel {
   override def crossKernel(test: Array[Vector]): BDM[Double] = BDM.zeros[Double](test.length, getTrainingVectors.length)
 
   override def whiteNoiseVar: Double = 1
-
 
   override def toString = "I"
 }
