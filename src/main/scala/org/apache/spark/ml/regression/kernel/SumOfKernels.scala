@@ -61,8 +61,3 @@ class SumOfKernels(private val kernel1: Kernel,
 
   override def toString: String = List(kernel1, kernel2).map(_.toString).filter(_.length > 0).mkString(" + ")
 }
-
-class SummableKernel private[kernel](private val kernel: Kernel) {
-  def +(other: Kernel) = new SumOfKernels(kernel, other)
-}
-
