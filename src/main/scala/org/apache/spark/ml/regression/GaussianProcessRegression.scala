@@ -1,7 +1,8 @@
 package org.apache.spark.ml.regression
 
-import breeze.linalg.{inv, logdet, DenseMatrix => BDM, DenseVector => BDV, _}
+import breeze.linalg.{DenseMatrix => BDM, DenseVector => BDV, _}
 import breeze.optimize.{DiffFunction, LBFGSB}
+import com.github.fommil.netlib.LAPACK.{getInstance => lapack}
 import org.apache.spark.internal.Logging
 import org.apache.spark.ml.PredictorParams
 import org.apache.spark.ml.feature.LabeledPoint
@@ -9,6 +10,7 @@ import org.apache.spark.ml.linalg.Vector
 import org.apache.spark.ml.param.shared._
 import org.apache.spark.ml.param.{DoubleParam, IntParam, Param, ParamMap}
 import org.apache.spark.ml.regression.kernel.{EyeKernel, Kernel, RBFKernel, _}
+import org.apache.spark.ml.regression.util.logDetAndInv
 import org.apache.spark.ml.util.{Identifiable, Instrumentation}
 import org.apache.spark.rdd.RDD
 import org.apache.spark.sql.functions.col
@@ -162,12 +164,12 @@ class GaussianProcessRegression(override val uid: String)
 
   private def likelihoodAndGradient(y: BDV[Double], kernel : Kernel) = {
     val (k, derivative) = kernel.trainingKernelAndDerivative()
-    val Kinv = inv(k)
-    val alpha = Kinv * y
-    val likelihood = 0.5 * (y.t * alpha) + 0.5 * logdet(k)._2
+    val (_, logdet, kinv) = logDetAndInv(k)
+    val alpha = kinv * y
+    val likelihood = 0.5 * (y.t * alpha) + 0.5 * logdet
 
     val alphaAlphaTMinusKinv = alpha * alpha.t
-    alphaAlphaTMinusKinv -= Kinv
+    alphaAlphaTMinusKinv -= kinv
 
     val gradient = derivative.map(derivative => -0.5 * sum(derivative *= alphaAlphaTMinusKinv))
     (likelihood, BDV(gradient:_*))
@@ -257,4 +259,5 @@ trait GaussianProcessRegressionHelper {
       throw new NotPositiveDefiniteException
   }
 }
+
 
