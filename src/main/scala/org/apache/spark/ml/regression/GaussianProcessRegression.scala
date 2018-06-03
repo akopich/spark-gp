@@ -1,7 +1,7 @@
 package org.apache.spark.ml.regression
 
 import breeze.linalg.{DenseMatrix => BDM, DenseVector => BDV, _}
-import breeze.optimize.{DiffFunction, LBFGSB}
+import breeze.optimize.LBFGSB
 import com.github.fommil.netlib.LAPACK.{getInstance => lapack}
 import org.apache.spark.internal.Logging
 import org.apache.spark.ml.PredictorParams
@@ -9,16 +9,13 @@ import org.apache.spark.ml.feature.LabeledPoint
 import org.apache.spark.ml.linalg.Vector
 import org.apache.spark.ml.param.shared._
 import org.apache.spark.ml.param.{DoubleParam, IntParam, Param, ParamMap}
-import org.apache.spark.ml.regression.kernel.{EyeKernel, Kernel, RBFKernel, _}
-import org.apache.spark.ml.regression.util.logDetAndInv
+import org.apache.spark.ml.regression.kernel.{Kernel, RBFKernel}
+import org.apache.spark.ml.regression.util.{DiffFunctionMemoized, GaussianProcessCommons, logDetAndInv}
 import org.apache.spark.ml.util.{Identifiable, Instrumentation}
 import org.apache.spark.rdd.RDD
-import org.apache.spark.sql.functions.col
-import org.apache.spark.sql.{Dataset, Row}
+import org.apache.spark.sql.Dataset
 
-import scala.collection.mutable
-
-private[regression] trait GaussianProcessRegressionParams extends PredictorParams
+private[ml] trait GaussianProcessParams extends PredictorParams
   with HasMaxIter with HasTol with HasAggregationDepth with HasSeed {
 
   final val activeSetProvider = new Param[ActiveSetProvider](this, "activeSetProvider",
@@ -88,21 +85,16 @@ private[regression] trait GaussianProcessRegressionParams extends PredictorParam
   */
 class GaussianProcessRegression(override val uid: String)
   extends Regressor[Vector, GaussianProcessRegression, GaussianProcessRegressionModel]
-    with GaussianProcessRegressionParams with GaussianProcessRegressionHelper with Logging {
+    with GaussianProcessParams with GaussianProcessRegressionHelper with GaussianProcessCommons with Logging {
 
   def this() = this(Identifiable.randomUID("gaussProcessReg"))
-
-  private val getKernel : () => Kernel = () => $(kernel)() + $(sigma2).const * new EyeKernel
 
   override protected def train(dataset: Dataset[_]): GaussianProcessRegressionModel = {
     val instr = Instrumentation.create(this, dataset)
 
     val points: RDD[LabeledPoint] = getPoints(dataset).cache()
 
-    val expertLabelsAndKernels: RDD[(BDV[Double], Kernel)] = groupForExperts(points).map { chunk =>
-      val (labels, trainingVectors) = chunk.map(lp => (lp.label, lp.features)).toArray.unzip
-      (BDV(labels: _*), getKernel().setTrainingVectors(trainingVectors))
-    }.cache()
+    val expertLabelsAndKernels: RDD[(BDV[Double], Kernel)] = getExpertLabelsAndKernels(points).cache()
 
     instr.log("Optimising the kernel hyperparameters")
     val optimalHyperparameters = optimizeHyperparameters(expertLabelsAndKernels)
@@ -111,40 +103,15 @@ class GaussianProcessRegression(override val uid: String)
 
     expertLabelsAndKernels.foreach(_._2.setHyperparameters(optimalHyperparameters))
 
-    val activeSet = $(activeSetProvider)($(activeSetSize), expertLabelsAndKernels, points,
-      getKernel, optimalHyperparameters, $(seed))
+    val model = projectedProcess(expertLabelsAndKernels, points, optimalHyperparameters, optimalKernel)
 
-    points.unpersist()
-
-    val (matrixKmnKnm, vectorKmny) = getMatrixKmnKnmAndVectorKmny(expertLabelsAndKernels, activeSet)
-
-    expertLabelsAndKernels.unpersist()
-
-    optimalKernel.setTrainingVectors(activeSet)
-
-    // inv(sigma^2 K_mm + K_mn * K_nm) * K_mn * y
-    val magicVector = getMagicVector(optimalKernel, matrixKmnKnm, vectorKmny, activeSet, optimalHyperparameters)
-
-    val model = new GaussianProcessRegressionModel(uid, magicVector, optimalKernel)
     instr.logSuccess(model)
     model
   }
 
-  private def getPoints(dataset: Dataset[_]) = {
-    dataset.select(col($(labelCol)), col($(featuresCol))).rdd.map {
-      case Row(label: Double, features: Vector) => LabeledPoint(label, features)
-    }
-  }
-
   private def optimizeHyperparameters(expertLabelsAndKernels: RDD[(BDV[Double], Kernel)]) = {
-    val f = new DiffFunction[BDV[Double]] with Serializable {
-      private val cache = mutable.HashMap[BDV[Double], (Double, BDV[Double])]()
-
-      override def calculate(x: BDV[Double]): (Double, BDV[Double]) = {
-        cache.getOrElseUpdate(x, calculateNoMemory(x))
-      }
-
-      private def calculateNoMemory(x: BDV[Double]): (Double, BDV[Double]) = {
+    val f = new DiffFunctionMemoized[BDV[Double]] with Serializable {
+      override protected def calculateNoMemory(x: BDV[Double]): (Double, BDV[Double]) = {
         expertLabelsAndKernels.treeAggregate((0d, BDV.zeros[Double](x.length)))({ case (u, (y, k)) =>
           k.setHyperparameters(x)
           val (likelihood, gradient) = likelihoodAndGradient(y, k)
@@ -173,13 +140,6 @@ class GaussianProcessRegression(override val uid: String)
 
     val gradient = derivative.map(derivative => -0.5 * sum(derivative *= alphaAlphaTMinusKinv))
     (likelihood, BDV(gradient:_*))
-  }
-
-  private def groupForExperts(points: RDD[LabeledPoint]) = {
-    val numberOfExperts = Math.round(points.count().toDouble / $(datasetSizeForExpert))
-    points.zipWithIndex.map { case(instance, index) =>
-      (index % numberOfExperts, instance)
-    }.groupByKey().map(_._2)
   }
 
   override def copy(extra: ParamMap): GaussianProcessRegression = defaultCopy(extra)
