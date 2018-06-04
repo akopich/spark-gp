@@ -23,7 +23,6 @@ class GaussianProcessClassification(override val uid: String)
   override protected def train(dataset: Dataset[_]): GaussianProcessClassificationModel = {
     val instr = Instrumentation.create(this, dataset)
     val points: RDD[LabeledPoint] = getPoints(dataset)
-      .map(lp => new LabeledPoint(lp.label * 2 - 1, lp.features)).cache()
 
     // RDD of (y, f, kernel)
     val expertLabelsHiddensAndKernels: RDD[(BDV[Double], BDV[Double], Kernel)] = getExpertLabelsAndKernels(points)
@@ -83,12 +82,12 @@ class GaussianProcessClassification(override val uid: String)
       sqrtW = sqrt(W)
       val B = BDM.eye[Double](y.length) + sqrtW * kernelMatrix * sqrtW
       L = cholesky(B)
-      gradLogP = (y + 1d) / 2d - pi
+      gradLogP = y - pi
       val b = W * f + gradLogP
       a = b - sqrtW * L.t \ (L \ (sqrtW * (kernelMatrix * b)))
       f := kernelMatrix * a
       oldObj = newObj
-      newObj = -a.t * f / 2d + sum(numerics.log(sigmoid(y *:* f)))
+      newObj = -a.t * f / 2d + sum(numerics.log(sigmoid((y * 2d - 1d) *:* f)))
     }
 
     val logZ = newObj - sum(numerics.log(diag(L)))
