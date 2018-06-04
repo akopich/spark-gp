@@ -1,7 +1,6 @@
 package org.apache.spark.ml.regression
 
-import breeze.linalg.{DenseMatrix => BDM, DenseVector => BDV, _}
-import com.github.fommil.netlib.LAPACK.{getInstance => lapack}
+import breeze.linalg.{DenseVector => BDV, _}
 import org.apache.spark.internal.Logging
 import org.apache.spark.ml.commons._
 import org.apache.spark.ml.commons.kernel.Kernel
