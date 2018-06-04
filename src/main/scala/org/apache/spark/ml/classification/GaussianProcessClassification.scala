@@ -70,21 +70,22 @@ class GaussianProcessClassification(override val uid: String)
     var oldObj = Double.NegativeInfinity
     var newObj = 0d
 
-    var L : BDM[Double] = null // initialize us
-    var sqrtW : BDM[Double] = null
-    var pi : BDV[Double] = null
-    var a : BDV[Double] = null
-    var gradLogP : BDV[Double] = null
+    val L : BDM[Double] = BDM.zeros[Double](y.length, y.length)
+    val sqrtW : BDM[Double] = BDM.zeros[Double](y.length, y.length)
+    val pi : BDV[Double] = BDV.zeros[Double](y.length)
+    val a : BDV[Double] = BDV.zeros[Double](y.length)
+    val gradLogP : BDV[Double] = BDV.zeros[Double](y.length)
+    val I = BDM.eye[Double](y.length)
 
     while (abs(oldObj - newObj) > $(tol)) {
-      pi = sigmoid(f)
+      pi := sigmoid(f)
       val W = diag(pi * (1d - pi)) // optimize me
-      sqrtW = sqrt(W)
-      val B = BDM.eye[Double](y.length) + sqrtW * kernelMatrix * sqrtW
-      L = cholesky(B)
-      gradLogP = y - pi
+      sqrtW := sqrt(W)
+      val B = I + sqrtW * kernelMatrix * sqrtW
+      L := cholesky(B)
+      gradLogP := y - pi
       val b = W * f + gradLogP
-      a = b - sqrtW * L.t \ (L \ (sqrtW * (kernelMatrix * b)))
+      a := b - sqrtW * L.t \ (L \ (sqrtW * (kernelMatrix * b)))
       f := kernelMatrix * a
       oldObj = newObj
       newObj = -a.t * f / 2d + sum(numerics.log(sigmoid((y * 2d - 1d) *:* f)))
