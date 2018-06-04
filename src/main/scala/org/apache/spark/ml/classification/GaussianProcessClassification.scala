@@ -3,10 +3,8 @@ package org.apache.spark.ml.classification
 import breeze.linalg.{DenseMatrix => BDM, DenseVector => BDV, _}
 import breeze.numerics
 import breeze.numerics.{abs, exp, sigmoid, sqrt}
-import breeze.optimize.LBFGSB
 import org.apache.spark.internal.Logging
 import org.apache.spark.ml.commons.kernel.Kernel
-import org.apache.spark.ml.commons.util.DiffFunctionMemoized
 import org.apache.spark.ml.commons.{GaussianProcessCommons, GaussianProcessParams, GaussianProjectedProcessRawPredictor, ProjectedGaussianProcessHelper}
 import org.apache.spark.ml.feature.LabeledPoint
 import org.apache.spark.ml.linalg.{DenseVector, SparseVector, Vector, Vectors}
@@ -54,44 +52,20 @@ class GaussianProcessClassification(override val uid: String)
       .map {case(y, kernel) => (y, BDV.zeros[Double](y.size), kernel)}
       .cache()
 
-    instr.log("Optimising the kernel hyperparameters")
-    val optimalHyperparameters = optimizeHyperparameters(expertLabelsHiddensAndKernels)
-    val optimalKernel = getKernel().setHyperparameters(optimalHyperparameters)
-    instr.log("Optimal kernel: " + optimalKernel)
+    val optimalHyperparameters = optimizeHypers(instr, expertLabelsHiddensAndKernels, likelihoodAndGradient)
 
-    expertLabelsHiddensAndKernels.foreach(_._3.setHyperparameters(optimalHyperparameters))
-    // ensure f corresponding to optimal hypers
-    expertLabelsHiddensAndKernels.foreach {case(y, f, k) => likelihoodAndGradient(y, f, k) }
+    // Set the optimal hypers to all the kernels and estimate the corresponding f
+    expertLabelsHiddensAndKernels.foreach(yfk =>  likelihoodAndGradient(yfk, optimalHyperparameters))
 
-    val rawPredictor = projectedProcess(expertLabelsHiddensAndKernels.map {case(_, f, kernel) => (f, kernel) },
-      points, optimalHyperparameters, optimalKernel)
-
-    val model = new GaussianProcessClassificationModel(uid, rawPredictor)
-    instr.logSuccess(model)
-    model
+    produceModel[GaussianProcessClassificationModel, GaussianProcessClassification](instr,
+      points,
+      expertLabelsHiddensAndKernels.map {case(_, f, kernel) => (f, kernel) },
+      optimalHyperparameters)
   }
 
-  private def optimizeHyperparameters(expertLabelsHiddensAndKernels: RDD[(BDV[Double], BDV[Double], Kernel)]) = {
-    val function = new DiffFunctionMemoized[BDV[Double]] with Serializable {
-      override protected def calculateNoMemory(x: BDV[Double]): (Double, BDV[Double]) = {
-        expertLabelsHiddensAndKernels.treeAggregate((0d, BDV.zeros[Double](x.length)))({ case (u, (y, f, k)) =>
-          k.setHyperparameters(x)
-          val (likelihood, gradient) = likelihoodAndGradient(y, f, k)
-          (u._1 + likelihood, u._2 += gradient)
-        }, { case (u, v) =>
-          (u._1 + v._1, u._2 += v._2)
-        })
-      }
-    }
-
-    val x0 = getKernel().getHyperparameters
-    val (lower, upper) = getKernel().hyperparameterBoundaries
-    val solver = new LBFGSB(lower, upper, maxIter = $(maxIter), tolerance = $(tol))
-
-    solver.minimize(function, x0)
-  }
-
-  private def likelihoodAndGradient(y: BDV[Double], f: BDV[Double], kernel: Kernel) = {
+  private def likelihoodAndGradient(yFandK: (BDV[Double], BDV[Double], Kernel), x: BDV[Double]) = {
+    val (y: BDV[Double], f: BDV[Double], kernel: Kernel) = yFandK
+    kernel.setHyperparameters(x)
     val (kernelMatrix, derivatives) = kernel.trainingKernelAndDerivative()
 
     var oldObj = Double.NegativeInfinity

@@ -1,7 +1,6 @@
 package org.apache.spark.ml.regression
 
 import breeze.linalg.{DenseMatrix => BDM, DenseVector => BDV, _}
-import breeze.optimize.LBFGSB
 import com.github.fommil.netlib.LAPACK.{getInstance => lapack}
 import org.apache.spark.internal.Logging
 import org.apache.spark.ml.commons._
@@ -47,40 +46,17 @@ class GaussianProcessRegression(override val uid: String)
 
     val expertLabelsAndKernels: RDD[(BDV[Double], Kernel)] = getExpertLabelsAndKernels(points).cache()
 
-    instr.log("Optimising the kernel hyperparameters")
-    val optimalHyperparameters = optimizeHyperparameters(expertLabelsAndKernels)
-    val optimalKernel = getKernel().setHyperparameters(optimalHyperparameters)
-    instr.log("Optimal kernel: " + optimalKernel)
+    val optimalHyperparameters = optimizeHypers(instr, expertLabelsAndKernels, likelihoodAndGradient)
 
     expertLabelsAndKernels.foreach(_._2.setHyperparameters(optimalHyperparameters))
 
-    val rawPredictor = projectedProcess(expertLabelsAndKernels, points, optimalHyperparameters, optimalKernel)
-    val model = new GaussianProcessRegressionModel(uid, rawPredictor)
-    instr.logSuccess(model)
-    model
+    produceModel[GaussianProcessRegressionModel, GaussianProcessRegression](instr,
+      points, expertLabelsAndKernels, optimalHyperparameters)
   }
 
-  private def optimizeHyperparameters(expertLabelsAndKernels: RDD[(BDV[Double], Kernel)]) = {
-    val f = new DiffFunctionMemoized[BDV[Double]] with Serializable {
-      override protected def calculateNoMemory(x: BDV[Double]): (Double, BDV[Double]) = {
-        expertLabelsAndKernels.treeAggregate((0d, BDV.zeros[Double](x.length)))({ case (u, (y, k)) =>
-          k.setHyperparameters(x)
-          val (likelihood, gradient) = likelihoodAndGradient(y, k)
-          (u._1 + likelihood, u._2 += gradient)
-        }, { case (u, v) =>
-          (u._1 + v._1, u._2 += v._2)
-        })
-      }
-    }
-
-    val x0 = getKernel().getHyperparameters
-    val (lower, upper) = getKernel().hyperparameterBoundaries
-    val solver = new LBFGSB(lower, upper, maxIter = $(maxIter), tolerance = $(tol))
-
-    solver.minimize(f, x0)
-  }
-
-  private def likelihoodAndGradient(y: BDV[Double], kernel : Kernel) = {
+  private def likelihoodAndGradient(yAndK : (BDV[Double], Kernel), x : BDV[Double]) = {
+    val (y: BDV[Double], kernel : Kernel) = yAndK
+    kernel.setHyperparameters(x)
     val (k, derivative) = kernel.trainingKernelAndDerivative()
     val (_, logdet, kinv) = logDetAndInv(k)
     val alpha = kinv * y
