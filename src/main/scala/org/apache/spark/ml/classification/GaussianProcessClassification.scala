@@ -10,14 +10,14 @@ import org.apache.spark.ml.linalg.{DenseVector, SparseVector, Vector, Vectors}
 import org.apache.spark.ml.param.ParamMap
 import org.apache.spark.ml.regression._
 import org.apache.spark.ml.regression.kernel.Kernel
-import org.apache.spark.ml.regression.util.{DiffFunctionMemoized, GaussianProcessCommons}
+import org.apache.spark.ml.regression.util.{DiffFunctionMemoized, GaussianProcessCommons, ProjectedGaussianProcessHelper}
 import org.apache.spark.ml.util.{Identifiable, Instrumentation}
 import org.apache.spark.rdd.RDD
 import org.apache.spark.sql.Dataset
 
 class GaussianProcessClassification(override val uid: String)
   extends ProbabilisticClassifier[Vector, GaussianProcessClassification, GaussianProcessClassificationModel]
-    with GaussianProcessParams with GaussianProcessRegressionHelper with GaussianProcessCommons with Logging {
+    with GaussianProcessParams with ProjectedGaussianProcessHelper with GaussianProcessCommons with Logging {
   def this() = this(Identifiable.randomUID("gaussProcessClass"))
 
   override protected def train(dataset: Dataset[_]): GaussianProcessClassificationModel = {

@@ -5,12 +5,12 @@ import org.apache.spark.ml.Predictor
 import org.apache.spark.ml.feature.LabeledPoint
 import org.apache.spark.ml.linalg.Vector
 import org.apache.spark.ml.regression.kernel.{EyeKernel, Kernel, _}
-import org.apache.spark.ml.regression.{GaussianProcessParams, GaussianProcessRegressionHelper, GaussianProcessRegressionModel}
+import org.apache.spark.ml.regression.{GaussianProcessParams, GaussianProcessRegressionModel}
 import org.apache.spark.rdd.RDD
 import org.apache.spark.sql.functions.col
 import org.apache.spark.sql.{Dataset, Row}
 
-trait GaussianProcessCommons extends GaussianProcessRegressionHelper {
+trait GaussianProcessCommons extends ProjectedGaussianProcessHelper {
   this: Predictor[_, _, _] with GaussianProcessParams =>
 
   protected val getKernel : () => Kernel = () => $(kernel)() + $(sigma2).const * new EyeKernel

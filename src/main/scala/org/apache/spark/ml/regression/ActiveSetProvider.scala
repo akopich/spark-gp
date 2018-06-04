@@ -5,6 +5,7 @@ import org.apache.spark.broadcast.Broadcast
 import org.apache.spark.ml.feature.LabeledPoint
 import org.apache.spark.ml.linalg.Vector
 import org.apache.spark.ml.regression.kernel.Kernel
+import org.apache.spark.ml.regression.util.ProjectedGaussianProcessHelper
 import org.apache.spark.rdd.RDD
 
 trait ActiveSetProvider extends Serializable {
@@ -34,7 +35,7 @@ object RandomActiveSetProvider extends ActiveSetProvider {
   * Fast Forward Selection to Speed Up Sparse Gaussian Process Regression by Seeger et al. 2003
   *
   */
-object GreedilyOptimizingActiveSetProvider extends ActiveSetProvider with GaussianProcessRegressionHelper {
+object GreedilyOptimizingActiveSetProvider extends ActiveSetProvider with ProjectedGaussianProcessHelper {
   override def apply(activeSetSize: Int,
                       expertLabelsAndKernels: RDD[(BDV[Double], Kernel)],
                       points: RDD[LabeledPoint],
