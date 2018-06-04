@@ -1,4 +1,4 @@
-package org.apache.spark.ml.regression
+package org.apache.spark.ml.commons
 
 package object kernel {
   implicit def toScalar(C: Double) = new Scalar(C)

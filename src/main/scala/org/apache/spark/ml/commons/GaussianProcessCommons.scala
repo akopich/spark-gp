@@ -1,11 +1,11 @@
-package org.apache.spark.ml.regression.util
+package org.apache.spark.ml.commons
 
-import breeze.linalg.{DenseMatrix => BDM, DenseVector => BDV}
+import breeze.linalg.{DenseVector => BDV}
 import org.apache.spark.ml.Predictor
+import org.apache.spark.ml.commons.kernel.{EyeKernel, Kernel, _}
 import org.apache.spark.ml.feature.LabeledPoint
 import org.apache.spark.ml.linalg.Vector
 import org.apache.spark.ml.regression.GaussianProcessParams
-import org.apache.spark.ml.regression.kernel.{EyeKernel, Kernel, _}
 import org.apache.spark.rdd.RDD
 import org.apache.spark.sql.functions.col
 import org.apache.spark.sql.{Dataset, Row}
@@ -57,7 +57,7 @@ trait GaussianProcessCommons extends ProjectedGaussianProcessHelper {
   }
 }
 
-class GaussianProjectedProcessRawPredictor private[util] (val magicVector: BDV[Double],
+class GaussianProjectedProcessRawPredictor private[commons] (val magicVector: BDV[Double],
                                                           val kernel: Kernel) extends Serializable {
   def predict(features: Vector): Double = {
     kernel.crossKernel(features) * magicVector

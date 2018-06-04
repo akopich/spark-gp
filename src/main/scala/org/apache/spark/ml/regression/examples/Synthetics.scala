@@ -2,10 +2,11 @@ package org.apache.spark.ml.regression.examples
 
 import breeze.linalg._
 import breeze.numerics._
+import org.apache.spark.ml.commons.RandomActiveSetProvider
+import org.apache.spark.ml.commons.kernel.{RBFKernel, WhiteNoiseKernel, _}
 import org.apache.spark.ml.feature.LabeledPoint
 import org.apache.spark.ml.linalg.Vectors
-import org.apache.spark.ml.regression.kernel.{RBFKernel, WhiteNoiseKernel, _}
-import org.apache.spark.ml.regression.{GaussianProcessRegression, RandomActiveSetProvider}
+import org.apache.spark.ml.regression.GaussianProcessRegression
 
 object Synthetics extends App with GPExample {
   import spark.sqlContext.implicits._

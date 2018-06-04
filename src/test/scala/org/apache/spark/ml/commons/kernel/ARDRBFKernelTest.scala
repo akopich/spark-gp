@@ -1,4 +1,4 @@
-package org.apache.spark.ml.regression.kernel
+package org.apache.spark.ml.commons.kernel
 
 import breeze.linalg.{all, DenseMatrix => BDM, DenseVector => BDV}
 import breeze.numerics.abs

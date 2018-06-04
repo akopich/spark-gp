@@ -1,4 +1,4 @@
-package org.apache.spark.ml.regression.util
+package org.apache.spark.ml.commons.util
 
 import breeze.linalg.{LU, MatrixSingularException, DenseMatrix => BDM, DenseVector => BDV}
 import com.github.fommil.netlib.LAPACK.{getInstance => lapack}

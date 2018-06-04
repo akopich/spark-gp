@@ -2,10 +2,10 @@ package org.apache.spark.ml.regression.benchmark
 
 import breeze.linalg.{sum, DenseMatrix => BDM, DenseVector => BDV, _}
 import breeze.numerics.sin
+import org.apache.spark.ml.commons.kernel.RBFKernel
 import org.apache.spark.ml.feature.LabeledPoint
 import org.apache.spark.ml.linalg.Vectors
 import org.apache.spark.ml.regression.GaussianProcessRegression
-import org.apache.spark.ml.regression.kernel.RBFKernel
 import org.apache.spark.sql.SparkSession
 
 import scala.util.Random

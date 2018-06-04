@@ -5,12 +5,13 @@ import breeze.optimize.LBFGSB
 import com.github.fommil.netlib.LAPACK.{getInstance => lapack}
 import org.apache.spark.internal.Logging
 import org.apache.spark.ml.PredictorParams
+import org.apache.spark.ml.commons._
+import org.apache.spark.ml.commons.kernel.{Kernel, RBFKernel}
+import org.apache.spark.ml.commons.util._
 import org.apache.spark.ml.feature.LabeledPoint
 import org.apache.spark.ml.linalg.Vector
 import org.apache.spark.ml.param.shared._
 import org.apache.spark.ml.param.{DoubleParam, IntParam, Param, ParamMap}
-import org.apache.spark.ml.regression.kernel.{Kernel, RBFKernel}
-import org.apache.spark.ml.regression.util._
 import org.apache.spark.ml.util.{Identifiable, Instrumentation}
 import org.apache.spark.rdd.RDD
 import org.apache.spark.sql.Dataset

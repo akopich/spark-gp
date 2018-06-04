@@ -1,11 +1,10 @@
-package org.apache.spark.ml.regression
+package org.apache.spark.ml.commons
 
 import breeze.linalg.{inv, DenseMatrix => BDM, DenseVector => BDV}
 import org.apache.spark.broadcast.Broadcast
+import org.apache.spark.ml.commons.kernel.Kernel
 import org.apache.spark.ml.feature.LabeledPoint
 import org.apache.spark.ml.linalg.Vector
-import org.apache.spark.ml.regression.kernel.Kernel
-import org.apache.spark.ml.regression.util.ProjectedGaussianProcessHelper
 import org.apache.spark.rdd.RDD
 
 trait ActiveSetProvider extends Serializable {

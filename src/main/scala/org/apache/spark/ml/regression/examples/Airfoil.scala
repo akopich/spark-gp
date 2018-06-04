@@ -2,10 +2,10 @@ package org.apache.spark.ml.regression.examples
 
 import breeze.linalg.DenseVector
 import breeze.numerics.sqrt
+import org.apache.spark.ml.commons.kernel.{ARDRBFKernel, _}
 import org.apache.spark.ml.feature.LabeledPoint
 import org.apache.spark.ml.linalg.Vectors
 import org.apache.spark.ml.regression.GaussianProcessRegression
-import org.apache.spark.ml.regression.kernel.{ARDRBFKernel, _}
 import org.apache.spark.rdd.RDD
 
 object Airfoil extends App with GPExample {

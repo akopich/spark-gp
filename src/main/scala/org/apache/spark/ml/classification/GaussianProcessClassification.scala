@@ -5,12 +5,13 @@ import breeze.numerics
 import breeze.numerics.{abs, exp, sigmoid, sqrt}
 import breeze.optimize.LBFGSB
 import org.apache.spark.internal.Logging
+import org.apache.spark.ml.commons.kernel.Kernel
+import org.apache.spark.ml.commons.util.DiffFunctionMemoized
+import org.apache.spark.ml.commons.{GaussianProcessCommons, GaussianProjectedProcessRawPredictor, ProjectedGaussianProcessHelper}
 import org.apache.spark.ml.feature.LabeledPoint
 import org.apache.spark.ml.linalg.{DenseVector, SparseVector, Vector, Vectors}
 import org.apache.spark.ml.param.ParamMap
 import org.apache.spark.ml.regression._
-import org.apache.spark.ml.regression.kernel.Kernel
-import org.apache.spark.ml.regression.util.{DiffFunctionMemoized, GaussianProcessCommons, GaussianProjectedProcessRawPredictor, ProjectedGaussianProcessHelper}
 import org.apache.spark.ml.util.{Identifiable, Instrumentation}
 import org.apache.spark.rdd.RDD
 import org.apache.spark.sql.Dataset

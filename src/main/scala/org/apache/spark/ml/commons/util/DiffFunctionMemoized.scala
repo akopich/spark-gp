@@ -1,4 +1,4 @@
-package org.apache.spark.ml.regression.util
+package org.apache.spark.ml.commons.util
 
 import breeze.optimize.DiffFunction
 
