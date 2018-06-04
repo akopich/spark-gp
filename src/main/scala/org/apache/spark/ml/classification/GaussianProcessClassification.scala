@@ -68,7 +68,7 @@ class GaussianProcessClassification(override val uid: String)
     val (kernelMatrix, derivatives) = kernel.trainingKernelAndDerivative()
 
     var oldObj = Double.NegativeInfinity
-    var newObj = 0d
+    var newObj = Double.MinValue
 
     val L = BDM.zeros[Double](y.length, y.length)
     val sqrtW = BDM.zeros[Double](y.length, y.length)
@@ -76,6 +76,7 @@ class GaussianProcessClassification(override val uid: String)
     val a = BDV.zeros[Double](y.length)
     val gradLogP = BDV.zeros[Double](y.length)
     val I = BDM.eye[Double](y.length)
+    var newtonStepSize = 1d
 
     while (abs(oldObj - newObj) > $(tol)) {
       pi := sigmoid(f)
@@ -86,9 +87,15 @@ class GaussianProcessClassification(override val uid: String)
       gradLogP := y - pi
       val b = W * f + gradLogP
       a := b - sqrtW * L.t \ (L \ (sqrtW * (kernelMatrix * b)))
-      f := kernelMatrix * a
-      oldObj = newObj
-      newObj = -a.t * f / 2d + sum(numerics.log(sigmoid((y * 2d - 1d) *:* f)))
+      val newfCandidate = (1 - newtonStepSize) * f + newtonStepSize * kernelMatrix * a
+      val newObjCandidate = -a.t * newfCandidate / 2d + sum(numerics.log(sigmoid((y * 2d - 1d) *:* newfCandidate)))
+      if (newObjCandidate > oldObj) {
+        f := newfCandidate
+        oldObj = newObj
+        newObj = newObjCandidate
+      } else {
+        newtonStepSize /= 2
+      }
     }
 
     val logZ = newObj - sum(numerics.log(diag(L)))
