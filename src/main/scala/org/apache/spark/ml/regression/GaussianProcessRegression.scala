@@ -10,7 +10,7 @@ import org.apache.spark.ml.linalg.Vector
 import org.apache.spark.ml.param.shared._
 import org.apache.spark.ml.param.{DoubleParam, IntParam, Param, ParamMap}
 import org.apache.spark.ml.regression.kernel.{Kernel, RBFKernel}
-import org.apache.spark.ml.regression.util.{DiffFunctionMemoized, GaussianProcessCommons, ProjectedGaussianProcessHelper, logDetAndInv}
+import org.apache.spark.ml.regression.util._
 import org.apache.spark.ml.util.{Identifiable, Instrumentation}
 import org.apache.spark.rdd.RDD
 import org.apache.spark.sql.Dataset
@@ -103,8 +103,8 @@ class GaussianProcessRegression(override val uid: String)
 
     expertLabelsAndKernels.foreach(_._2.setHyperparameters(optimalHyperparameters))
 
-    val model = projectedProcess(expertLabelsAndKernels, points, optimalHyperparameters, optimalKernel)
-
+    val rawPredictor = projectedProcess(expertLabelsAndKernels, points, optimalHyperparameters, optimalKernel)
+    val model = new GaussianProcessRegressionModel(uid, rawPredictor)
     instr.logSuccess(model)
     model
   }
@@ -146,16 +146,15 @@ class GaussianProcessRegression(override val uid: String)
 }
 
 class GaussianProcessRegressionModel private[regression](override val uid: String,
-                                                         val magicVector: BDV[Double],
-                                                         val kernel: Kernel)
+          private val gaussianProjectedProcessRawPredictor: GaussianProjectedProcessRawPredictor)
   extends RegressionModel[Vector, GaussianProcessRegressionModel] {
 
-  override def predict(features: Vector): Double = { // TODO too accessible
-    kernel.crossKernel(features) * magicVector
+  override protected def predict(features: Vector): Double = {
+    gaussianProjectedProcessRawPredictor.predict(features)
   }
 
   override def copy(extra: ParamMap): GaussianProcessRegressionModel = {
-    val newModel = copyValues(new GaussianProcessRegressionModel(uid, magicVector, kernel), extra)
+    val newModel = copyValues(new GaussianProcessRegressionModel(uid, gaussianProjectedProcessRawPredictor), extra)
     newModel.setParent(parent)
   }
 }

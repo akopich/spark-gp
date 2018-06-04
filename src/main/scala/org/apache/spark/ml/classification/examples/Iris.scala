@@ -23,16 +23,11 @@ object Iris extends App  {
 
   val gp = new GaussianProcessClassification().setDatasetSizeForExpert(20).setActiveSetSize(30)
 
-//  val Array(train, test) = dataset.randomSplit(Array(0.6, 0.4), seed = 11L)
-//
-//  val transformed = gp.fit(train).transform(test)
-//  transformed.show(40)
-
     val cv = new CrossValidator()
     .setEstimator(gp)
     .setEvaluator(new MulticlassClassificationEvaluator().setMetricName("accuracy"))
     .setEstimatorParamMaps(new ParamGridBuilder().build())
     .setNumFolds(10)
 
-  println("RMSE: " + cv.fit(dataset).avgMetrics.toList)
+  println("Accuracy: " + cv.fit(dataset).avgMetrics.toList)
 }

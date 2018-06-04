@@ -10,7 +10,7 @@ import org.apache.spark.ml.linalg.{DenseVector, SparseVector, Vector, Vectors}
 import org.apache.spark.ml.param.ParamMap
 import org.apache.spark.ml.regression._
 import org.apache.spark.ml.regression.kernel.Kernel
-import org.apache.spark.ml.regression.util.{DiffFunctionMemoized, GaussianProcessCommons, ProjectedGaussianProcessHelper}
+import org.apache.spark.ml.regression.util.{DiffFunctionMemoized, GaussianProcessCommons, GaussianProjectedProcessRawPredictor, ProjectedGaussianProcessHelper}
 import org.apache.spark.ml.util.{Identifiable, Instrumentation}
 import org.apache.spark.rdd.RDD
 import org.apache.spark.sql.Dataset
@@ -37,10 +37,12 @@ class GaussianProcessClassification(override val uid: String)
 
     expertLabelsHiddensAndKernels.foreach(_._3.setHyperparameters(optimalHyperparameters))
 
-    val regressor = projectedProcess(expertLabelsHiddensAndKernels.map {case(_, f, kernel) => (f, kernel) },
+    val rawPredictor = projectedProcess(expertLabelsHiddensAndKernels.map {case(_, f, kernel) => (f, kernel) },
       points, optimalHyperparameters, optimalKernel)
 
-    new GaussianProcessClassificationModel(uid, regressor)
+    val model = new GaussianProcessClassificationModel(uid, rawPredictor)
+    instr.logSuccess(model)
+    model
   }
 
   private def optimizeHyperparameters(expertLabelsHiddensAndKernels: RDD[(BDV[Double], BDV[Double], Kernel)]) = {
@@ -110,7 +112,7 @@ class GaussianProcessClassification(override val uid: String)
 }
 
 class GaussianProcessClassificationModel private[classification](override val uid: String,
-                                                                 private val regressor: GaussianProcessRegressionModel)
+              private val gaussianProjectedProcessRawPredictor: GaussianProjectedProcessRawPredictor)
   extends ProbabilisticClassificationModel[Vector, GaussianProcessClassificationModel] {
 
   override protected def raw2probabilityInPlace(rawPrediction: Vector): Vector = rawPrediction match {
@@ -126,12 +128,12 @@ class GaussianProcessClassificationModel private[classification](override val ui
   override def numClasses: Int = 2
 
   override protected def predictRaw(features: Vector): Vector = {
-    val f = regressor.predict(features)
+    val f = gaussianProjectedProcessRawPredictor.predict(features)
     Vectors.dense(-f, f)
   }
 
   override def copy(extra: ParamMap): GaussianProcessClassificationModel = {
-    val newModel = copyValues(new GaussianProcessClassificationModel(uid, regressor), extra)
+    val newModel = copyValues(new GaussianProcessClassificationModel(uid, gaussianProjectedProcessRawPredictor), extra)
     newModel.setParent(parent)
   }
 }
