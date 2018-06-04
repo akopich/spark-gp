@@ -5,7 +5,6 @@ import org.apache.spark.ml.Predictor
 import org.apache.spark.ml.commons.kernel.{EyeKernel, Kernel, _}
 import org.apache.spark.ml.feature.LabeledPoint
 import org.apache.spark.ml.linalg.Vector
-import org.apache.spark.ml.regression.GaussianProcessParams
 import org.apache.spark.rdd.RDD
 import org.apache.spark.sql.functions.col
 import org.apache.spark.sql.{Dataset, Row}
