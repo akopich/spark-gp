@@ -6,7 +6,7 @@ import breeze.numerics.{abs, exp, sigmoid, sqrt}
 import breeze.optimize.LBFGSB
 import org.apache.spark.internal.Logging
 import org.apache.spark.ml.feature.LabeledPoint
-import org.apache.spark.ml.linalg.Vector
+import org.apache.spark.ml.linalg.{DenseVector, SparseVector, Vector, Vectors}
 import org.apache.spark.ml.param.ParamMap
 import org.apache.spark.ml.regression._
 import org.apache.spark.ml.regression.kernel.Kernel
@@ -22,7 +22,8 @@ class GaussianProcessClassification(override val uid: String)
 
   override protected def train(dataset: Dataset[_]): GaussianProcessClassificationModel = {
     val instr = Instrumentation.create(this, dataset)
-    val points: RDD[LabeledPoint] = getPoints(dataset).cache()
+    val points: RDD[LabeledPoint] = getPoints(dataset)
+      .map(lp => new LabeledPoint(lp.label * 2 - 1, lp.features)).cache()
 
     // RDD of (y, f, kernel)
     val expertLabelsHiddensAndKernels: RDD[(BDV[Double], BDV[Double], Kernel)] = getExpertLabelsAndKernels(points)
@@ -36,18 +37,15 @@ class GaussianProcessClassification(override val uid: String)
 
     expertLabelsHiddensAndKernels.foreach(_._3.setHyperparameters(optimalHyperparameters))
 
-    val model = projectedProcess(expertLabelsHiddensAndKernels.map(x => (x._2, x._3)),
+    val regressor = projectedProcess(expertLabelsHiddensAndKernels.map {case(_, f, kernel) => (f, kernel) },
       points, optimalHyperparameters, optimalKernel)
 
-    val a = 1
-
-    ???
+    new GaussianProcessClassificationModel(uid, regressor)
   }
 
   private def optimizeHyperparameters(expertLabelsHiddensAndKernels: RDD[(BDV[Double], BDV[Double], Kernel)]) = {
     val function = new DiffFunctionMemoized[BDV[Double]] with Serializable {
       override protected def calculateNoMemory(x: BDV[Double]): (Double, BDV[Double]) = {
-        println("AAAAAAA " + x)
         expertLabelsHiddensAndKernels.treeAggregate((0d, BDV.zeros[Double](x.length)))({ case (u, (y, f, k)) =>
           k.setHyperparameters(x)
           val (likelihood, gradient) = likelihoodAndGradient(y, f, k)
@@ -57,14 +55,6 @@ class GaussianProcessClassification(override val uid: String)
         })
       }
     }
-
-    val (value, grad) = function.calculate(BDV(1d))
-    val h = 1e-3
-    val (valueLeft, _) = function.calculate(BDV(1d-h))
-    val (valueRight, _) = function.calculate(BDV(1d+h))
-
-    println("EMPIRICAL " + (valueRight - valueLeft)/(2*h) )
-    println("Analytical " + grad)
 
     val x0 = getKernel().getHyperparameters
     val (lower, upper) = getKernel().hyperparameterBoundaries
@@ -119,14 +109,29 @@ class GaussianProcessClassification(override val uid: String)
   override def copy(extra: ParamMap): GaussianProcessClassification = defaultCopy(extra)
 }
 
-class GaussianProcessClassificationModel private[classification](override val uid: String)
+class GaussianProcessClassificationModel private[classification](override val uid: String,
+                                                                 private val regressor: GaussianProcessRegressionModel)
   extends ProbabilisticClassificationModel[Vector, GaussianProcessClassificationModel] {
 
-  override protected def raw2probabilityInPlace(rawPrediction: Vector): Vector = ???
+  override protected def raw2probabilityInPlace(rawPrediction: Vector): Vector = rawPrediction match {
+    case dv : DenseVector =>
+      dv.values(0) = sigmoid(-dv.values(0))
+      dv.values(1) = sigmoid(dv.values(1))
+      rawPrediction
+    case sv: SparseVector =>
+      throw new RuntimeException("Unexpected error in GaussianProcessClassificationModel:" +
+        " raw2probabilitiesInPlace encountered SparseVector")
+  }
 
-  override def numClasses: Int = ???
+  override def numClasses: Int = 2
 
-  override protected def predictRaw(features: Vector): Vector = ???
+  override protected def predictRaw(features: Vector): Vector = {
+    val f = regressor.predict(features)
+    Vectors.dense(-f, f)
+  }
 
-  override def copy(extra: ParamMap): GaussianProcessClassificationModel = ???
+  override def copy(extra: ParamMap): GaussianProcessClassificationModel = {
+    val newModel = copyValues(new GaussianProcessClassificationModel(uid, regressor), extra)
+    newModel.setParent(parent)
+  }
 }
