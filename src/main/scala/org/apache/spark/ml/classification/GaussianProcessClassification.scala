@@ -70,16 +70,16 @@ class GaussianProcessClassification(override val uid: String)
     var oldObj = Double.NegativeInfinity
     var newObj = 0d
 
-    val L : BDM[Double] = BDM.zeros[Double](y.length, y.length)
-    val sqrtW : BDM[Double] = BDM.zeros[Double](y.length, y.length)
-    val pi : BDV[Double] = BDV.zeros[Double](y.length)
-    val a : BDV[Double] = BDV.zeros[Double](y.length)
-    val gradLogP : BDV[Double] = BDV.zeros[Double](y.length)
+    val L = BDM.zeros[Double](y.length, y.length)
+    val sqrtW = BDM.zeros[Double](y.length, y.length)
+    val pi = BDV.zeros[Double](y.length)
+    val a = BDV.zeros[Double](y.length)
+    val gradLogP = BDV.zeros[Double](y.length)
     val I = BDM.eye[Double](y.length)
 
     while (abs(oldObj - newObj) > $(tol)) {
       pi := sigmoid(f)
-      val W = diag(pi * (1d - pi)) // optimize me
+      val W = diag(pi * (1d - pi)) // TODO optimize me
       sqrtW := sqrt(W)
       val B = I + sqrtW * kernelMatrix * sqrtW
       L := cholesky(B)
@@ -96,7 +96,7 @@ class GaussianProcessClassification(override val uid: String)
     val R = sqrtW * L.t \ (L \ sqrtW)
     val C = L \ (sqrtW * kernelMatrix)
     val d3logP = -(2d * pi - 1d) *:* pi *:* pi *:* exp(-f)
-    val s2 = - 0.5 * diag(diag(kernelMatrix) - diag(C.t * C)) * d3logP // optimize me
+    val s2 = - 0.5 * (diag(kernelMatrix) - diag(C.t * C)) *:* d3logP
 
     val gradLogZ = BDV[Double](derivatives.map(C => {
       val s1 = 0.5 * (a.t * C * a) - 0.5 * trace(R * C)
@@ -118,9 +118,9 @@ class GaussianProcessClassificationModel private[classification](override val ui
   override protected def raw2probabilityInPlace(rawPrediction: Vector): Vector = rawPrediction match {
     case dv : DenseVector =>
       dv.values(0) = sigmoid(-dv.values(0))
-      dv.values(1) = sigmoid(dv.values(1))
+      dv.values(1) = 1 - dv.values(0)
       rawPrediction
-    case sv: SparseVector =>
+    case _: SparseVector =>
       throw new RuntimeException("Unexpected error in GaussianProcessClassificationModel:" +
         " raw2probabilitiesInPlace encountered SparseVector")
   }
