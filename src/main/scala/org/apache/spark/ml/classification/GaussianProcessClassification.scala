@@ -106,7 +106,7 @@ class GaussianProcessClassification(override val uid: String)
     val s2 = - 0.5 * (diag(kernelMatrix) - diag(C.t * C)) *:* d3logP
 
     val gradLogZ = BDV[Double](derivatives.map(C => {
-      val s1 = 0.5 * (a.t * C * a) - 0.5 * trace(R * C)
+      val s1 = 0.5 * (a.t * C * a) - 0.5 * sum(R *:* C)
       val b = C * gradLogP
       val s3 = b - kernelMatrix * R * b
       s1 + s2.t * s3
