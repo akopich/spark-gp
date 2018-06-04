@@ -26,11 +26,6 @@ object Iris extends App  {
   val gp = new GaussianProcessClassification().setDatasetSizeForExpert(20).setActiveSetSize(30)
   val ovr = new OneVsRest().setClassifier(gp)
 
-    val Array(train, test) = dataset.randomSplit(Array(0.6, 0.4), seed = 11L)
-
-    val transformed = ovr.fit(train).transform(test)
-    transformed.show(40)
-
   val cv = new CrossValidator()
     .setEstimator(ovr)
     .setEvaluator(new MulticlassClassificationEvaluator().setMetricName("accuracy"))
