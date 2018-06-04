@@ -15,6 +15,31 @@ import org.apache.spark.ml.util.{Identifiable, Instrumentation}
 import org.apache.spark.rdd.RDD
 import org.apache.spark.sql.Dataset
 
+/**
+  * Gaussian Process Classifier.
+  *
+  * Fitting of hyperparameters and prediction for GPR is infeasible for large datasets due to
+  * high computational complexity O(N^3^).
+  *
+  * This implementation relies on the Bayesian Committee Machine proposed in [2] for fitting and on
+  * Projected Process Approximation for prediction Chapter 8.3.4 [1].
+  *
+  * The classifier uses sigmoid link function which makes posterior intractable. The issue is overcome via
+  * Laplace approximation in a manner similar to the one presented in Chapters 3 and 5 [1].
+  *
+  * This way the linear complexity in sample size is achieved for fitting,
+  * while prediction complexity doesn't depend on it.
+  *
+  * This implementation supports binary classification only.
+  *
+  * [1] Carl Edward Rasmussen and Christopher K. I. Williams. 2005. Gaussian Processes for Machine Learning
+  * (Adaptive Computation and Machine Learning). The MIT Press.
+  *
+  * [2] Marc Peter Deisenroth and Jun Wei Ng. 2015. Distributed Gaussian processes.
+  * In Proceedings of the 32nd International Conference on International Conference on Machine Learning
+  * Volume 37 (ICML'15), Francis Bach and David Blei (Eds.), Vol. 37. JMLR.org 1481-1490.
+  *
+  */
 class GaussianProcessClassification(override val uid: String)
   extends ProbabilisticClassifier[Vector, GaussianProcessClassification, GaussianProcessClassificationModel]
     with GaussianProcessParams with ProjectedGaussianProcessHelper with GaussianProcessCommons with Logging {
@@ -80,6 +105,7 @@ class GaussianProcessClassification(override val uid: String)
     val I = BDM.eye[Double](y.length)
     var newtonStepSize = 1d
 
+    //  The loop below (Algorithm 3.1 from [1]) is Newtonian optimization of q(f|X, y) w.r.t. f.
     while (abs(oldObj - newObj) > $(tol)) {
       pi := sigmoid(f)
       val W = diag(pi * (1d - pi)) // TODO optimize me
@@ -100,6 +126,7 @@ class GaussianProcessClassification(override val uid: String)
       }
     }
 
+    // below we calculate the approximating log-likelihood and its derivatives using Algorithm 5.1 from [1].
     val logZ = newObj - sum(numerics.log(diag(L)))
 
     val R = sqrtW * L.t \ (L \ sqrtW)
