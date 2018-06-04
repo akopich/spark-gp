@@ -1,6 +1,6 @@
 package org.apache.spark.ml.regression.util
 
-import breeze.linalg.{any, eigSym}
+import breeze.linalg.{any, eigSym, DenseMatrix => BDM, DenseVector => BDV}
 import org.apache.spark.ml.linalg.Vector
 import org.apache.spark.ml.regression.kernel.Kernel
 import org.apache.spark.rdd.RDD
