@@ -35,6 +35,8 @@ class GaussianProcessClassification(override val uid: String)
     instr.log("Optimal kernel: " + optimalKernel)
 
     expertLabelsHiddensAndKernels.foreach(_._3.setHyperparameters(optimalHyperparameters))
+    // ensure f corresponding to optimal hypers
+    expertLabelsHiddensAndKernels.foreach {case(y, f, k) => likelihoodAndGradient(y, f, k) }
 
     val rawPredictor = projectedProcess(expertLabelsHiddensAndKernels.map {case(_, f, kernel) => (f, kernel) },
       points, optimalHyperparameters, optimalKernel)
