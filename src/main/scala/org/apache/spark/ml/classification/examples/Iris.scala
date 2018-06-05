@@ -1,6 +1,6 @@
 package org.apache.spark.ml.classification.examples
 
-import org.apache.spark.ml.classification.{GaussianProcessClassification, OneVsRest}
+import org.apache.spark.ml.classification.{GaussianProcessClassifier, OneVsRest}
 import org.apache.spark.ml.evaluation.MulticlassClassificationEvaluator
 import org.apache.spark.ml.feature.LabeledPoint
 import org.apache.spark.ml.linalg.Vectors
@@ -23,7 +23,7 @@ object Iris extends App  {
     LabeledPoint(label, features)
   }).toDF
 
-  val gp = new GaussianProcessClassification().setDatasetSizeForExpert(20).setActiveSetSize(30)
+  val gp = new GaussianProcessClassifier().setDatasetSizeForExpert(20).setActiveSetSize(30)
   val ovr = new OneVsRest().setClassifier(gp)
 
   val cv = new CrossValidator()

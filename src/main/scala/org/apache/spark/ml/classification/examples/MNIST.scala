@@ -2,7 +2,7 @@ package org.apache.spark.ml.classification.examples
 
 import breeze.linalg.DenseVector
 import breeze.numerics.sqrt
-import org.apache.spark.ml.classification.{GaussianProcessClassification, OneVsRest}
+import org.apache.spark.ml.classification.{GaussianProcessClassifier, OneVsRest}
 import org.apache.spark.ml.evaluation.MulticlassClassificationEvaluator
 import org.apache.spark.ml.feature.LabeledPoint
 import org.apache.spark.ml.linalg.Vectors
@@ -25,7 +25,7 @@ object MNIST extends App {
     LabeledPoint(label, features)
   }).cache()).toDF.repartition(parallelism).cache()
 
-  val gp = new GaussianProcessClassification().setDatasetSizeForExpert(forExpert).setActiveSetSize(activeSet)
+  val gp = new GaussianProcessClassifier().setDatasetSizeForExpert(forExpert).setActiveSetSize(activeSet)
   val ovr = new OneVsRest().setClassifier(gp)
 
   val cv = new TrainValidationSplit()

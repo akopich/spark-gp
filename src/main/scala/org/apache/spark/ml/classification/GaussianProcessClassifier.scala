@@ -38,10 +38,10 @@ import org.apache.spark.sql.Dataset
   * Volume 37 (ICML'15), Francis Bach and David Blei (Eds.), Vol. 37. JMLR.org 1481-1490.
   *
   */
-class GaussianProcessClassification(override val uid: String)
-  extends ProbabilisticClassifier[Vector, GaussianProcessClassification, GaussianProcessClassificationModel]
+class GaussianProcessClassifier(override val uid: String)
+  extends ProbabilisticClassifier[Vector, GaussianProcessClassifier, GaussianProcessClassificationModel]
     with GaussianProcessParams
-    with GaussianProcessCommons[Vector, GaussianProcessClassification, GaussianProcessClassificationModel]
+    with GaussianProcessCommons[Vector, GaussianProcessClassifier, GaussianProcessClassificationModel]
     with Logging {
   def this() = this(Identifiable.randomUID("gaussProcessClass"))
 
@@ -129,7 +129,7 @@ class GaussianProcessClassification(override val uid: String)
     (-logZ, -gradLogZ)
   }
 
-  override def copy(extra: ParamMap): GaussianProcessClassification = defaultCopy(extra)
+  override def copy(extra: ParamMap): GaussianProcessClassifier = defaultCopy(extra)
 
   override protected def createModel(uid: String,
                                      rawPredictor: GaussianProjectedProcessRawPredictor): GaussianProcessClassificationModel = new GaussianProcessClassificationModel(uid, rawPredictor)
