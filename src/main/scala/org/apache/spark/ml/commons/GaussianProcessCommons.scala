@@ -7,15 +7,13 @@ import org.apache.spark.ml.commons.util.DiffFunctionMemoized
 import org.apache.spark.ml.feature.LabeledPoint
 import org.apache.spark.ml.linalg.Vector
 import org.apache.spark.ml.util.Instrumentation
-import org.apache.spark.ml.{Estimator, Model, Predictor}
+import org.apache.spark.ml.{PredictionModel, Predictor}
 import org.apache.spark.rdd.RDD
 import org.apache.spark.sql.functions.col
 import org.apache.spark.sql.{Dataset, Row}
 
-import scala.reflect.ClassTag
-
-trait GaussianProcessCommons extends ProjectedGaussianProcessHelper {
-  this: Predictor[_, _, _] with GaussianProcessParams =>
+trait GaussianProcessCommons[F, E <: Predictor[F, E, M], M <: PredictionModel[F, M]]
+  extends ProjectedGaussianProcessHelper {  this: Predictor[F, E, M] with GaussianProcessParams =>
 
   protected val getKernel : () => Kernel = () => $(kernel)() + $(sigma2).const * new EyeKernel
 
@@ -62,10 +60,9 @@ trait GaussianProcessCommons extends ProjectedGaussianProcessHelper {
   /**
     *
     * @tparam T for GPR it's (y, kernel), for GPC it's (y, f, kernel)
-    * @tparam E type of the estimator
     * @return the optimal hyperparameters estimates
     */
-  protected def optimizeHypers[T, E <: Estimator[_]](instr: Instrumentation[E],
+  protected def optimizeHypers[T](instr: Instrumentation[E],
                                                    expertValuesAndKernels: RDD[T],
                                                    likelihoodAndGradient: (T, BDV[Double]) => (Double, BDV[Double])) = {
     instr.log("Optimising the kernel hyperparameters")
@@ -99,19 +96,22 @@ trait GaussianProcessCommons extends ProjectedGaussianProcessHelper {
     * @param points
     * @param expertLabelsAndKernels the kernels contained in the RDD should have the optimal hyperparameters set
     * @param optimalHyperparameters
-    * @tparam M Model type
-    * @tparam E Estimator type
     * @return the model
     */
-  protected def produceModel[M <: Model[M] : ClassTag, E <: Estimator[M]](instr: Instrumentation[E],
+  protected def produceModel(instr: Instrumentation[E],
                                                 points: RDD[LabeledPoint],
                                                 expertLabelsAndKernels: RDD[(BDV[Double], Kernel)],
                                                 optimalHyperparameters: BDV[Double]) = {
     val rawPredictor = projectedProcess(expertLabelsAndKernels, points, optimalHyperparameters)
-    val model = implicitly[ClassTag[M]].runtimeClass.getConstructors.head.newInstance(uid, rawPredictor).asInstanceOf[M]
+    val model = createModel(uid, rawPredictor)
     instr.logSuccess(model)
     model
   }
+
+  /**
+    * just calls the constructor
+    */
+  protected def createModel(uid: String, rawPredictor: GaussianProjectedProcessRawPredictor) : M
 }
 
 class GaussianProjectedProcessRawPredictor private[commons] (val magicVector: BDV[Double],
@@ -120,3 +120,4 @@ class GaussianProjectedProcessRawPredictor private[commons] (val magicVector: BD
     kernel.crossKernel(features) * magicVector
   }
 }
+

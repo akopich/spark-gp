@@ -34,7 +34,8 @@ import org.apache.spark.sql.Dataset
   */
 class GaussianProcessRegression(override val uid: String)
   extends Regressor[Vector, GaussianProcessRegression, GaussianProcessRegressionModel]
-    with GaussianProcessParams with ProjectedGaussianProcessHelper with GaussianProcessCommons with Logging {
+    with GaussianProcessParams
+    with GaussianProcessCommons[Vector, GaussianProcessRegression, GaussianProcessRegressionModel] with Logging {
 
   def this() = this(Identifiable.randomUID("gaussProcessReg"))
 
@@ -49,7 +50,7 @@ class GaussianProcessRegression(override val uid: String)
 
     expertLabelsAndKernels.foreach(_._2.setHyperparameters(optimalHyperparameters))
 
-    produceModel[GaussianProcessRegressionModel, GaussianProcessRegression](instr,
+    produceModel(instr,
       points, expertLabelsAndKernels, optimalHyperparameters)
   }
 
@@ -69,6 +70,8 @@ class GaussianProcessRegression(override val uid: String)
   }
 
   override def copy(extra: ParamMap): GaussianProcessRegression = defaultCopy(extra)
+
+  override protected def createModel(uid: String, rawPredictor: GaussianProjectedProcessRawPredictor): GaussianProcessRegressionModel = new GaussianProcessRegressionModel(uid, rawPredictor)
 }
 
 class GaussianProcessRegressionModel private[regression](override val uid: String,

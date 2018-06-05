@@ -4,8 +4,8 @@ import breeze.linalg.{DenseMatrix => BDM, DenseVector => BDV, _}
 import breeze.numerics
 import breeze.numerics.{abs, exp, sigmoid, sqrt}
 import org.apache.spark.internal.Logging
+import org.apache.spark.ml.commons._
 import org.apache.spark.ml.commons.kernel.Kernel
-import org.apache.spark.ml.commons.{GaussianProcessCommons, GaussianProcessParams, GaussianProjectedProcessRawPredictor, ProjectedGaussianProcessHelper}
 import org.apache.spark.ml.feature.LabeledPoint
 import org.apache.spark.ml.linalg.{DenseVector, SparseVector, Vector, Vectors}
 import org.apache.spark.ml.param.ParamMap
@@ -40,7 +40,9 @@ import org.apache.spark.sql.Dataset
   */
 class GaussianProcessClassification(override val uid: String)
   extends ProbabilisticClassifier[Vector, GaussianProcessClassification, GaussianProcessClassificationModel]
-    with GaussianProcessParams with ProjectedGaussianProcessHelper with GaussianProcessCommons with Logging {
+    with GaussianProcessParams
+    with GaussianProcessCommons[Vector, GaussianProcessClassification, GaussianProcessClassificationModel]
+    with Logging {
   def this() = this(Identifiable.randomUID("gaussProcessClass"))
 
   override protected def train(dataset: Dataset[_]): GaussianProcessClassificationModel = {
@@ -57,7 +59,7 @@ class GaussianProcessClassification(override val uid: String)
     // Set the optimal hypers to all the kernels and estimate the corresponding f
     expertLabelsHiddensAndKernels.foreach(yfk =>  likelihoodAndGradient(yfk, optimalHyperparameters))
 
-    produceModel[GaussianProcessClassificationModel, GaussianProcessClassification](instr,
+    produceModel(instr,
       points,
       expertLabelsHiddensAndKernels.map {case(_, f, kernel) => (f, kernel) },
       optimalHyperparameters)
@@ -119,6 +121,9 @@ class GaussianProcessClassification(override val uid: String)
   }
 
   override def copy(extra: ParamMap): GaussianProcessClassification = defaultCopy(extra)
+
+  override protected def createModel(uid: String,
+                                     rawPredictor: GaussianProjectedProcessRawPredictor): GaussianProcessClassificationModel = new GaussianProcessClassificationModel(uid, rawPredictor)
 }
 
 class GaussianProcessClassificationModel private[classification](override val uid: String,
