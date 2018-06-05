@@ -93,8 +93,9 @@ class GaussianProcessClassification(override val uid: String)
       pi := sigmoid(f)
       val W = diag(pi * (1d - pi)) // TODO optimize me
       sqrtW := sqrt(W)
-      val B = I + sqrtW * kernelMatrix * sqrtW
-      B := (B.t + B) / 2d        // B might be computationally non-symmetric
+      val B = diag(sqrtW) * diag(sqrtW).t
+      B :*= kernelMatrix
+      B += I // B = I + sqrtW * kernelMatrix * sqrtW
       L := cholesky(B)
       gradLogP := y - pi
       val b = W * f + gradLogP
