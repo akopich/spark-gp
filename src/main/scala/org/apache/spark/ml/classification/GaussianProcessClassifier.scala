@@ -65,13 +65,6 @@ class GaussianProcessClassifier(override val uid: String)
       optimalHyperparameters)
   }
 
-  private def issymm(mat: Matrix[Double], tol: Double = 1e-7): Boolean = {
-    for (i <- 0 until mat.rows; j <- 0 until i)
-      if (abs(mat(i,j) -  mat(j,i)) > abs(mat(i,j)) * tol )
-        return false
-    true
-  }
-
   private def likelihoodAndGradient(yFandK: (BDV[Double], BDV[Double], Kernel), x: BDV[Double]) = {
     val (y: BDV[Double], f: BDV[Double], kernel: Kernel) = yFandK
     kernel.setHyperparameters(x)
