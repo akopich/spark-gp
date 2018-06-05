@@ -15,6 +15,8 @@ object MNIST extends App {
   val spark = SparkSession.builder().appName(name).master(s"local[${args(0)}]").getOrCreate()
   val path = args(1)
   val parallelism = args(0).toInt * 4
+  val forExpert = args(2).toInt
+  val activeSet = args(3).toInt
 
   import spark.sqlContext.implicits._
   val dataset = scale(spark.read.format("csv").load(path).rdd.map(row => {
@@ -23,7 +25,7 @@ object MNIST extends App {
     LabeledPoint(label, features)
   }).cache()).toDF.repartition(parallelism).cache()
 
-  val gp = new GaussianProcessClassification().setDatasetSizeForExpert(400).setActiveSetSize(1000)
+  val gp = new GaussianProcessClassification().setDatasetSizeForExpert(forExpert).setActiveSetSize(activeSet)
   val ovr = new OneVsRest().setClassifier(gp)
 
   val cv = new TrainValidationSplit()
@@ -41,6 +43,7 @@ object MNIST extends App {
     val variance = x.map(xx => (xx-mean) *:* (xx-mean) ).reduce(_+_) / x.count.toDouble
     val varianceNoZeroes = for (v <- variance) yield if (v > 0d) v else 1d
     val features = x.map(xx => (xx-mean) /:/ sqrt(varianceNoZeroes)).map(_.toArray).map(Vectors.dense)
+    x.unpersist()
     features zip y map {
       case(f, y) => LabeledPoint(y, f)
     }
