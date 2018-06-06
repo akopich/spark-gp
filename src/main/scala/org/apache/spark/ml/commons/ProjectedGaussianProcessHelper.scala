@@ -1,6 +1,6 @@
 package org.apache.spark.ml.commons
 
-import breeze.linalg.{any, eigSym, DenseMatrix => BDM, DenseVector => BDV}
+import breeze.linalg.{any, eigSym, inv, DenseMatrix => BDM, DenseVector => BDV}
 import org.apache.spark.ml.commons.kernel.Kernel
 import org.apache.spark.ml.linalg.Vector
 import org.apache.spark.rdd.RDD
@@ -51,12 +51,12 @@ trait ProjectedGaussianProcessHelper {
                      vectorKmny: BDV[Double],
                      activeSet: Array[Vector],
                      optimalHyperparameter: BDV[Double]) = {
-    val positiveDefiniteMatrix = kernel.trainingKernel() //K_mm
-    positiveDefiniteMatrix *= kernel.whiteNoiseVar // sigma^2 K_mm
+    val trainKernel = kernel.trainingKernel()
+    val positiveDefiniteMatrix = kernel.whiteNoiseVar * trainKernel // sigma^2 K_mm
     positiveDefiniteMatrix += matrixKmnKnm // sigma^2 K_mm + K_mn * K_nm
 
     assertSymPositiveDefinite(positiveDefiniteMatrix)
-    positiveDefiniteMatrix \ vectorKmny
+    (positiveDefiniteMatrix \ vectorKmny, inv(positiveDefiniteMatrix) * kernel.whiteNoiseVar - inv(trainKernel))
   }
 
   protected def assertSymPositiveDefinite(matrix: BDM[Double]): Unit = {

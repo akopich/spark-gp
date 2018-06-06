@@ -1,6 +1,6 @@
 package org.apache.spark.ml.commons
 
-import breeze.linalg.{DenseVector => BDV}
+import breeze.linalg.{DenseMatrix => BDM, DenseVector => BDV}
 import breeze.optimize.LBFGSB
 import org.apache.spark.ml.commons.kernel.{EyeKernel, Kernel, _}
 import org.apache.spark.ml.commons.util.DiffFunctionMemoized
@@ -52,9 +52,10 @@ trait GaussianProcessCommons[F, E <: Predictor[F, E, M], M <: PredictionModel[F,
     val optimalKernel = getKernel().setHyperparameters(optimalHyperparameters).setTrainingVectors(activeSet)
 
     // inv(sigma^2 K_mm + K_mn * K_nm) * K_mn * y
-    val magicVector = getMagicVector(optimalKernel, matrixKmnKnm, vectorKmny, activeSet, optimalHyperparameters)
+    val (magicVector, magicMatrix) = getMagicVector(optimalKernel,
+      matrixKmnKnm, vectorKmny, activeSet, optimalHyperparameters)
 
-    new GaussianProjectedProcessRawPredictor(magicVector, optimalKernel)
+    new GaussianProjectedProcessRawPredictor(magicVector, magicMatrix, optimalKernel)
   }
 
   /**
@@ -63,8 +64,8 @@ trait GaussianProcessCommons[F, E <: Predictor[F, E, M], M <: PredictionModel[F,
     * @return the optimal hyperparameters estimates
     */
   protected def optimizeHypers[T](instr: Instrumentation[E],
-                                                   expertValuesAndKernels: RDD[T],
-                                                   likelihoodAndGradient: (T, BDV[Double]) => (Double, BDV[Double])) = {
+                                  expertValuesAndKernels: RDD[T],
+                                  likelihoodAndGradient: (T, BDV[Double]) => (Double, BDV[Double])) = {
     instr.log("Optimising the kernel hyperparameters")
 
     val f = new DiffFunctionMemoized[BDV[Double]] with Serializable {
@@ -115,9 +116,12 @@ trait GaussianProcessCommons[F, E <: Predictor[F, E, M], M <: PredictionModel[F,
 }
 
 class GaussianProjectedProcessRawPredictor private[commons] (val magicVector: BDV[Double],
-                                                          val kernel: Kernel) extends Serializable {
-  def predict(features: Vector): Double = {
-    kernel.crossKernel(features) * magicVector
+                                                             val magicMatrix: BDM[Double],
+                                                             val kernel: Kernel) extends Serializable {
+  def predict(features: Vector): (Double, Double) = {
+    val cross = kernel.crossKernel(features)
+    val selfKernel = kernel.trainingKernelDiag().head // TODO this is not fair
+    (cross * magicVector, selfKernel + cross * magicMatrix * cross.t)
   }
 }
 

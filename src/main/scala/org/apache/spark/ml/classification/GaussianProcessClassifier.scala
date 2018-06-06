@@ -145,7 +145,7 @@ class GaussianProcessClassificationModel private[classification](override val ui
   override def numClasses: Int = 2
 
   override protected def predictRaw(features: Vector): Vector = {
-    val f = gaussianProjectedProcessRawPredictor.predict(features)
+    val (f, _) = gaussianProjectedProcessRawPredictor.predict(features)
     Vectors.dense(-f, f)
   }
 

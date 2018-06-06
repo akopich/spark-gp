@@ -79,7 +79,7 @@ class GaussianProcessRegressionModel private[regression](override val uid: Strin
   extends RegressionModel[Vector, GaussianProcessRegressionModel] {
 
   override protected def predict(features: Vector): Double = {
-    gaussianProjectedProcessRawPredictor.predict(features)
+    gaussianProjectedProcessRawPredictor.predict(features)._1
   }
 
   override def copy(extra: ParamMap): GaussianProcessRegressionModel = {
