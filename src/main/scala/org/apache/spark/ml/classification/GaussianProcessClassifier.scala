@@ -47,7 +47,8 @@ class GaussianProcessClassifier(override val uid: String)
 
   override protected def train(dataset: Dataset[_]): GaussianProcessClassificationModel = {
     val instr = Instrumentation.create(this, dataset)
-    val points: RDD[LabeledPoint] = getPoints(dataset)
+    val points: RDD[LabeledPoint] = getPoints(dataset).cache()
+    assertLabelsAre01(points)
 
     // RDD of (y, f, kernel)
     val expertLabelsHiddensAndKernels: RDD[(BDV[Double], BDV[Double], Kernel)] = getExpertLabelsAndKernels(points)
@@ -63,6 +64,12 @@ class GaussianProcessClassifier(override val uid: String)
       points,
       expertLabelsHiddensAndKernels.map {case(_, f, kernel) => (f, kernel) },
       optimalHyperparameters)
+  }
+
+  private def assertLabelsAre01(points: RDD[LabeledPoint]): Unit = {
+    val set01 = Set(0d, 1d)
+    val areLabels01 = points.aggregate(true)((acc, lp) => acc && set01.contains(lp.label), _ && _)
+    if (!areLabels01) throw new RuntimeException("Only 0 and 1 labels are supported.")
   }
 
   private def likelihoodAndGradient(yFandK: (BDV[Double], BDV[Double], Kernel), x: BDV[Double]) = {
@@ -82,7 +89,7 @@ class GaussianProcessClassifier(override val uid: String)
     var newtonStepSize = 1d
 
     //  The loop below (Algorithm 3.1 from [1]) is Newtonian optimization of q(f|X, y) w.r.t. f.
-    while (abs(oldObj - newObj) > $(tol)) {
+    while (abs(oldObj - newObj) > $(tol) && newtonStepSize > $(tol)) {
       pi := sigmoid(f)
       val W = diag(pi * (1d - pi)) // TODO optimize me
       sqrtW := sqrt(W)
@@ -101,6 +108,7 @@ class GaussianProcessClassifier(override val uid: String)
         newObj = newObjCandidate
       } else {
         newtonStepSize /= 2
+        println(s"FUCK $newtonStepSize $newObj $newObjCandidate")
       }
     }
 
