@@ -2,7 +2,8 @@ package org.apache.spark.ml.classification.examples
 
 import breeze.linalg.DenseVector
 import breeze.numerics.sqrt
-import org.apache.spark.ml.classification.{GaussianProcessClassifier, OneVsRest}
+import org.apache.spark.ml.classification.GaussianProcessClassifier
+import org.apache.spark.ml.commons.kernel.RBFKernel
 import org.apache.spark.ml.evaluation.MulticlassClassificationEvaluator
 import org.apache.spark.ml.feature.LabeledPoint
 import org.apache.spark.ml.linalg.Vectors
@@ -19,17 +20,20 @@ object MNIST extends App {
   val activeSet = args(3).toInt
 
   import spark.sqlContext.implicits._
-  val dataset = scale(spark.read.format("csv").load(path).rdd.map(row => {
+  val dataset = (scale _ andThen labels201 _) (spark.read.format("csv").load(path).rdd.map(row => {
     val features = Vectors.dense((1 until row.length).map("_c" + _).map(row.getAs[String]).map(_.toDouble).toArray)
     val label = row.getAs[String]("_c0").toDouble
     LabeledPoint(label, features)
   }).cache()).toDF.repartition(parallelism).cache()
 
-  val gp = new GaussianProcessClassifier().setDatasetSizeForExpert(forExpert).setActiveSetSize(activeSet)
-  val ovr = new OneVsRest().setClassifier(gp)
+  val gp = new GaussianProcessClassifier()
+    .setDatasetSizeForExpert(forExpert)
+    .setActiveSetSize(activeSet)
+    .setKernel(() => new RBFKernel(10))
+    .setTol(1e-3)
 
   val cv = new TrainValidationSplit()
-    .setEstimator(ovr)
+    .setEstimator(gp)
     .setEvaluator(new MulticlassClassificationEvaluator().setMetricName("accuracy"))
     .setEstimatorParamMaps(new ParamGridBuilder().build())
     .setTrainRatio(0.8)
@@ -47,5 +51,10 @@ object MNIST extends App {
     features zip y map {
       case(f, y) => LabeledPoint(y, f)
     }
+  }
+
+  def labels201(data: RDD[LabeledPoint]) : RDD[LabeledPoint] = {
+    val old2new = data.map(_.label).distinct().collect().zipWithIndex.toMap
+    data.map(lp => LabeledPoint(old2new(lp.label), lp.features))
   }
 }
