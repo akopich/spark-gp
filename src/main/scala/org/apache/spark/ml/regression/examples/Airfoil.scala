@@ -1,14 +1,12 @@
 package org.apache.spark.ml.regression.examples
 
-import breeze.linalg.DenseVector
-import breeze.numerics.sqrt
 import org.apache.spark.ml.commons.kernel.{ARDRBFKernel, _}
+import org.apache.spark.ml.commons.util.Scaling
 import org.apache.spark.ml.feature.LabeledPoint
 import org.apache.spark.ml.linalg.Vectors
 import org.apache.spark.ml.regression.GaussianProcessRegression
-import org.apache.spark.rdd.RDD
 
-object Airfoil extends App with GPExample {
+object Airfoil extends App with GPExample with Scaling {
   import spark.sqlContext.implicits._
 
   override def name = "Airfoil"
@@ -30,16 +28,5 @@ object Airfoil extends App with GPExample {
         .map(col => row.getAs[String](col).toDouble))
       LabeledPoint(row.getAs[String]("_c5").toDouble, features)
     })
-  }
-
-  def scale(data: RDD[LabeledPoint]) = {
-    val x = data.map(x => DenseVector(x.features.toArray)).cache()
-    val y = data.map(_.label)
-    val mean = x.reduce(_+_) / x.count().toDouble
-    val variance = x.map(xx => (xx-mean) *:* (xx-mean) ).reduce(_+_) / x.count.toDouble
-    val features = x.map(xx => (xx-mean) /:/ sqrt(variance)).map(_.toArray).map(Vectors.dense)
-    features zip y map {
-      case(f, y) => LabeledPoint(y, f)
-    }
   }
 }
