@@ -1,5 +1,5 @@
 # spark-gp
-Gaussian Process Regression on Apache Spark
+Gaussian Process Regression and Classification on Apache Spark
 WIP
 
 The thing works in linear time. 
