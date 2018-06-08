@@ -5,7 +5,7 @@ import com.github.fommil.netlib.LAPACK.{getInstance => lapack}
 import org.netlib.util.intW
 import spire.implicits.cforRange
 
-object logDetAndInv {
+private[ml] object logDetAndInv {
   /**
     *
     * This code is adopted from breeze with minimal changes.

@@ -5,7 +5,7 @@ import breeze.optimize.DiffFunction
 import scala.collection.mutable
 
 
-trait DiffFunctionMemoized[T] extends DiffFunction[T] {
+private[ml] trait DiffFunctionMemoized[T] extends DiffFunction[T] {
   override def calculate(x: T): (Double, T) = {
     cache.getOrElseUpdate(x, calculateNoMemory(x))
   }

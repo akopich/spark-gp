@@ -36,7 +36,8 @@ trait ScalarTimesKernel extends Kernel {
   * @param kernel
   * @param C
   */
-class ConstantTimesKernel(protected val kernel: Kernel, protected val C: Double) extends ScalarTimesKernel {
+class ConstantTimesKernel private[kernel](protected val kernel: Kernel,
+                                          protected val C: Double) extends ScalarTimesKernel {
   override def getHyperparameters: BDV[Double] = kernel.getHyperparameters
 
   override def setHyperparameters(value: BDV[Double]): this.type = {
@@ -65,10 +66,10 @@ class ConstantTimesKernel(protected val kernel: Kernel, protected val C: Double)
   * @param Clower the value C should exceed
   * @param Cupper the value C should not exceed
   */
-class TrainableScalarTimesKernel(protected val kernel: Kernel,
-                                 protected var C: Double,
-                                 private val Clower: Double = 0,
-                                 private val Cupper: Double = inf) extends ScalarTimesKernel {
+class TrainableScalarTimesKernel private[kernel](protected val kernel: Kernel,
+                                                 protected var C: Double,
+                                                 private val Clower: Double = 0,
+                                                 private val Cupper: Double = inf) extends ScalarTimesKernel {
 
   override def getHyperparameters: BDV[Double] = prependToVector(C, kernel.getHyperparameters)
 

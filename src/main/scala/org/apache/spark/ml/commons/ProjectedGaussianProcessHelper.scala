@@ -5,7 +5,7 @@ import org.apache.spark.ml.commons.kernel.Kernel
 import org.apache.spark.ml.linalg.Vector
 import org.apache.spark.rdd.RDD
 
-trait ProjectedGaussianProcessHelper {
+private[ml] trait ProjectedGaussianProcessHelper {
   class NotPositiveDefiniteException extends Exception("Some matrix which is supposed to be " +
     "positive definite is not. This probably happened due to `sigma2` parameter being too small." +
     " Try to gradually increase it.")

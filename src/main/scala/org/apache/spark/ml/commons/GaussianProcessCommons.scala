@@ -12,7 +12,7 @@ import org.apache.spark.rdd.RDD
 import org.apache.spark.sql.functions.col
 import org.apache.spark.sql.{Dataset, Row}
 
-trait GaussianProcessCommons[F, E <: Predictor[F, E, M], M <: PredictionModel[F, M]]
+private[ml] trait GaussianProcessCommons[F, E <: Predictor[F, E, M], M <: PredictionModel[F, M]]
   extends ProjectedGaussianProcessHelper {  this: Predictor[F, E, M] with GaussianProcessParams =>
 
   protected val getKernel : () => Kernel = () => $(kernel)() + $(sigma2).const * new EyeKernel

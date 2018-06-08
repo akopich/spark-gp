@@ -6,7 +6,7 @@ import org.apache.spark.ml.feature.LabeledPoint
 import org.apache.spark.ml.linalg.Vectors
 import org.apache.spark.rdd.RDD
 
-trait Scaling {
+private[ml] trait Scaling {
   def scale(data: RDD[LabeledPoint]) = {
     val x = data.map(x => DenseVector(x.features.toArray)).cache()
     val y = data.map(_.label)
