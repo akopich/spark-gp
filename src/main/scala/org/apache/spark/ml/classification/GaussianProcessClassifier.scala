@@ -108,7 +108,6 @@ class GaussianProcessClassifier(override val uid: String)
         newObj = newObjCandidate
       } else {
         newtonStepSize /= 2
-        println(s"FUCK $newtonStepSize $newObj $newObjCandidate")
       }
     }
 

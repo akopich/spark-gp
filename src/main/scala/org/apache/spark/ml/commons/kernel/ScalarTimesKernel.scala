@@ -23,6 +23,8 @@ trait ScalarTimesKernel extends Kernel {
 
   override def crossKernel(test: Array[linalg.Vector]): BDM[Double] = kernel.crossKernel(test) *= C
 
+  override def selfKernel(test: linalg.Vector): Double = kernel.selfKernel(test) * C
+
   override def whiteNoiseVar: Double = C * kernel.whiteNoiseVar
 
   override def toString = if (C != 0) f"$C%1.1e * $kernel" else ""

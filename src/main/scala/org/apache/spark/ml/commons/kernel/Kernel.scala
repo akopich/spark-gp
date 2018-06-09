@@ -85,6 +85,13 @@ trait Kernel extends Serializable {
   }
 
   /**
+    * returns k(x, x)
+    * @param test
+    * @return returns a single value k(test, test)
+    */
+  def selfKernel(test: Vector): Double
+
+  /**
     *
     * @return variance of the white noise presumed by the kernel
     */
@@ -187,6 +194,8 @@ class RBFKernel(private var sigma: Double,
     result
   }
 
+  override def selfKernel(test: Vector): Double = 1d
+
   override def trainingKernelDiag(): Array[Double] = getTrainingVectors.map(_ => 1d)
 
   private def sqr(x: Double) = x * x
@@ -283,6 +292,8 @@ class ARDRBFKernel(private var beta: BDV[Double],
     result
   }
 
+  override def selfKernel(test: Vector): Double = 1d
+
   override def toString = "ARDRBFKernel(beta=" + BDV2String(beta) + ")"
 
   private def BDV2String(v : BDV[Double]) = v.valuesIterator.map(e => f"$e%1.1e").mkString("[", ", " , "]")
@@ -312,7 +323,9 @@ class EyeKernel extends TrainDatasetBearingKernel {
 
   override def crossKernel(test: Array[Vector]): BDM[Double] = BDM.zeros[Double](test.length, getTrainingVectors.length)
 
-  override def whiteNoiseVar: Double = 1
+  override def whiteNoiseVar: Double = 1d
+
+  override def selfKernel(test: Vector): Double = 1d
 
   override def toString = "I"
 }

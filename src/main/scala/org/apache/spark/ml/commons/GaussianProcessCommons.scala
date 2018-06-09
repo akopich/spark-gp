@@ -100,9 +100,9 @@ private[ml] trait GaussianProcessCommons[F, E <: Predictor[F, E, M], M <: Predic
     * @return the model
     */
   protected def produceModel(instr: Instrumentation[E],
-                                                points: RDD[LabeledPoint],
-                                                expertLabelsAndKernels: RDD[(BDV[Double], Kernel)],
-                                                optimalHyperparameters: BDV[Double]) = {
+                             points: RDD[LabeledPoint],
+                             expertLabelsAndKernels: RDD[(BDV[Double], Kernel)],
+                             optimalHyperparameters: BDV[Double]) = {
     val rawPredictor = projectedProcess(expertLabelsAndKernels, points, optimalHyperparameters)
     val model = createModel(uid, rawPredictor)
     instr.logSuccess(model)
@@ -120,7 +120,7 @@ class GaussianProjectedProcessRawPredictor private[commons] (val magicVector: BD
                                                              val kernel: Kernel) extends Serializable {
   def predict(features: Vector): (Double, Double) = {
     val cross = kernel.crossKernel(features)
-    val selfKernel = kernel.trainingKernelDiag().head // TODO this is not fair
+    val selfKernel = kernel.selfKernel(features)
     (cross * magicVector, selfKernel + cross * magicMatrix * cross.t)
   }
 }

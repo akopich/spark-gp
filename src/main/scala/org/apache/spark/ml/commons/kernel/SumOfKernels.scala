@@ -57,6 +57,8 @@ class SumOfKernels(private val kernel1: Kernel,
   override def crossKernel(test: Array[linalg.Vector]): DenseMatrix[Double] =
     kernel1.crossKernel(test) + kernel2.crossKernel(test)
 
+  override def selfKernel(test: linalg.Vector): Double = kernel1.selfKernel(test) + kernel2.selfKernel(test)
+
   override def whiteNoiseVar: Double = kernel1.whiteNoiseVar + kernel2.whiteNoiseVar
 
   override def toString: String = List(kernel1, kernel2).map(_.toString).filter(_.length > 0).mkString(" + ")
