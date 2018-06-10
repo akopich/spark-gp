@@ -58,7 +58,7 @@ trait Kernel extends Serializable {
     * `setTrainingVectors` should be called beforehand. Otherwise TrainingVectorsNotInitializedException is thrown.
     * @return the diagonal of the matrix which would be returned by `trainingKernel`.
     */
-  def trainingKernelDiag(): Array[Double]
+  def trainingKernelDiag(): BDV[Double]
 
   /**
     *`setTrainingVectors` should be called beforehand. Otherwise TrainingVectorsNotInitializedException is thrown.
@@ -105,6 +105,14 @@ trait NoiselessKernel extends Kernel {
   override def whiteNoiseVar: Double = 0
 }
 
+/**
+  *
+  */
+trait SameOnDiagonalKernel extends Kernel {
+  override def trainingKernelDiag(): BDV[Double] =
+    BDV.zeros[Double](getTrainingVectors.length) + selfKernel(getTrainingVectors.head)
+}
+
 class TrainingVectorsNotInitializedException
   extends Exception("setTrainingVectors method should have been called first")
 
@@ -133,7 +141,8 @@ trait TrainDatasetBearingKernel extends Kernel {
   */
 class RBFKernel(private var sigma: Double,
                 private val lower: Double = 1e-6,
-                private val upper: Double = inf) extends TrainDatasetBearingKernel with NoiselessKernel {
+                private val upper: Double = inf) extends TrainDatasetBearingKernel
+  with NoiselessKernel with SameOnDiagonalKernel {
   def this() = this(1)
 
   override def setHyperparameters(value: BDV[Double]): RBFKernel.this.type = {
@@ -196,8 +205,6 @@ class RBFKernel(private var sigma: Double,
 
   override def selfKernel(test: Vector): Double = 1d
 
-  override def trainingKernelDiag(): Array[Double] = getTrainingVectors.map(_ => 1d)
-
   private def sqr(x: Double) = x * x
 
   private def cube(x: Double) = x * x * x
@@ -220,7 +227,8 @@ class RBFKernel(private var sigma: Double,
   */
 class ARDRBFKernel(private var beta: BDV[Double],
                    private val lower: BDV[Double],
-                   private val upper: BDV[Double]) extends TrainDatasetBearingKernel with NoiselessKernel {
+                   private val upper: BDV[Double]) extends TrainDatasetBearingKernel
+  with NoiselessKernel with SameOnDiagonalKernel {
 
   def this(beta: BDV[Double]) = this(beta, beta * 0d, beta * inf)
 
@@ -243,10 +251,6 @@ class ARDRBFKernel(private var beta: BDV[Double],
   private def kernelElement(a: BV[Double], b: BV[Double]) : Double = {
     val weightedDistance = norm((a - b) *:* beta)
     exp(- weightedDistance * weightedDistance)
-  }
-
-  override def trainingKernelDiag(): Array[Double] = {
-    getTrainingVectors.map(_ => 1d)
   }
 
   override def trainingKernel(): BDM[Double] = {
@@ -302,7 +306,7 @@ class ARDRBFKernel(private var beta: BDV[Double],
 /**
   * Identity matrix kernel.
   */
-class EyeKernel extends TrainDatasetBearingKernel {
+class EyeKernel extends TrainDatasetBearingKernel with SameOnDiagonalKernel {
   override def getHyperparameters: BDV[Double] = BDV[Double]()
 
   override def setHyperparameters(value: BDV[Double]): EyeKernel.this.type = this
@@ -312,10 +316,6 @@ class EyeKernel extends TrainDatasetBearingKernel {
   override def hyperparameterBoundaries: (BDV[Double], BDV[Double]) = (BDV[Double](), BDV[Double]())
 
   override def trainingKernel(): BDM[Double] = BDM.eye[Double](getTrainingVectors.length)
-
-  override def trainingKernelDiag(): Array[Double] = {
-    getTrainingVectors.map(_ => 1d)
-  }
 
   override def trainingKernelAndDerivative(): (BDM[Double], Array[BDM[Double]]) = {
     (trainingKernel(), Array[BDM[Double]]())

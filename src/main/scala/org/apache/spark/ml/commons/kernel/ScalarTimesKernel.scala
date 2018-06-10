@@ -19,7 +19,7 @@ trait ScalarTimesKernel extends Kernel {
 
   override def trainingKernel(): BDM[Double] = kernel.trainingKernel() *= C
 
-  override def trainingKernelDiag(): Array[Double] = kernel.trainingKernelDiag().map(_ * C)
+  override def trainingKernelDiag(): BDV[Double] = kernel.trainingKernelDiag() *= C
 
   override def crossKernel(test: Array[linalg.Vector]): BDM[Double] = kernel.crossKernel(test) *= C
 

@@ -44,8 +44,8 @@ class SumOfKernels(private val kernel1: Kernel,
 
   override def trainingKernel(): DenseMatrix[Double] = kernel1.trainingKernel() += kernel2.trainingKernel()
 
-  override def trainingKernelDiag(): Array[Double] =
-    kernel1.trainingKernelDiag() zip kernel2.trainingKernelDiag() map{case(a,b) => a+b}
+  override def trainingKernelDiag(): BDV[Double] =
+    kernel1.trainingKernelDiag() += kernel2.trainingKernelDiag()
 
   override def trainingKernelAndDerivative(): (DenseMatrix[Double], Array[DenseMatrix[Double]]) = {
     val (k1, derivatives1) = kernel1.trainingKernelAndDerivative()
