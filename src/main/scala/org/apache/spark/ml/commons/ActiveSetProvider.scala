@@ -2,10 +2,13 @@ package org.apache.spark.ml.commons
 
 import breeze.linalg.{inv, DenseMatrix => BDM, DenseVector => BDV}
 import org.apache.spark.broadcast.Broadcast
+import org.apache.spark.ml.clustering.KMeans
 import org.apache.spark.ml.commons.kernel.Kernel
 import org.apache.spark.ml.feature.LabeledPoint
 import org.apache.spark.ml.linalg.Vector
 import org.apache.spark.rdd.RDD
+import org.apache.spark.sql.SparkSession
+
 
 trait ActiveSetProvider extends Serializable {
   def apply(activeSetSize: Int,
@@ -14,6 +17,29 @@ trait ActiveSetProvider extends Serializable {
             kernel: () => Kernel,
             optimalHyperparameter: BDV[Double],
             seed : Long) : Array[Vector]
+}
+
+/**
+  * Runs K-means on the supplied training set and returns the centroids as the active set.
+  * @param maxIter
+  */
+class KMeansActiveSetProvider(private val maxIter: Int = 20) extends ActiveSetProvider {
+  override def apply(activeSetSize: Int,
+                     expertLabelsAndKernels: RDD[(BDV[Double], Kernel)],
+                     points: RDD[LabeledPoint],
+                     kernel: () => Kernel,
+                     optimalHyperparameter: BDV[Double],
+                     seed: Long): Array[Vector] = {
+    val sparkContext = SparkSession.builder().getOrCreate()
+    import sparkContext.implicits._
+
+    new KMeans()
+      .setK(activeSetSize)
+      .setSeed(seed)
+      .setMaxIter(maxIter)
+      .fit(points.toDF)
+      .clusterCenters
+  }
 }
 
 /**

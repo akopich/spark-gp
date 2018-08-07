@@ -2,7 +2,7 @@ package org.apache.spark.ml.regression.examples
 
 import breeze.linalg._
 import breeze.numerics._
-import org.apache.spark.ml.commons.RandomActiveSetProvider
+import org.apache.spark.ml.commons.KMeansActiveSetProvider
 import org.apache.spark.ml.commons.kernel.{RBFKernel, WhiteNoiseKernel, _}
 import org.apache.spark.ml.feature.LabeledPoint
 import org.apache.spark.ml.linalg.Vectors
@@ -25,7 +25,7 @@ object Synthetics extends App with GPExample {
   val gp = new GaussianProcessRegression()
     .setKernel(() => 1*new RBFKernel(0.1, 1e-6, 10) + WhiteNoiseKernel(0.5, 0, 1))
     .setDatasetSizeForExpert(100)
-    .setActiveSetProvider(RandomActiveSetProvider)
+    .setActiveSetProvider(new KMeansActiveSetProvider())
     .setActiveSetSize(100)
     .setSeed(13)
     .setSigma2(1e-3)
