@@ -9,7 +9,7 @@ import org.apache.spark.ml.commons.kernel.Kernel
 import org.apache.spark.ml.feature.LabeledPoint
 import org.apache.spark.ml.linalg.{DenseVector, SparseVector, Vector, Vectors}
 import org.apache.spark.ml.param.ParamMap
-import org.apache.spark.ml.util.{Identifiable, Instrumentation}
+import org.apache.spark.ml.util.Identifiable
 import org.apache.spark.rdd.RDD
 import org.apache.spark.sql.Dataset
 
@@ -46,7 +46,6 @@ class GaussianProcessClassifier(override val uid: String)
   def this() = this(Identifiable.randomUID("gaussProcessClass"))
 
   override protected def train(dataset: Dataset[_]): GaussianProcessClassificationModel = {
-    val instr = Instrumentation.create(this, dataset)
     val points: RDD[LabeledPoint] = getPoints(dataset).cache()
     assertLabelsAre01(points)
 
@@ -55,12 +54,12 @@ class GaussianProcessClassifier(override val uid: String)
       .map {case(y, kernel) => (y, BDV.zeros[Double](y.size), kernel)}
       .cache()
 
-    val optimalHyperparameters = optimizeHypers(instr, expertLabelsHiddensAndKernels, likelihoodAndGradient)
+    val optimalHyperparameters = optimizeHypers( expertLabelsHiddensAndKernels, likelihoodAndGradient)
 
     // Set the optimal hypers to all the kernels and estimate the corresponding f
     expertLabelsHiddensAndKernels.foreach(yfk =>  likelihoodAndGradient(yfk, optimalHyperparameters))
 
-    produceModel(instr,
+    produceModel(
       points,
       expertLabelsHiddensAndKernels.map {case(_, f, kernel) => (f, kernel) },
       optimalHyperparameters)
