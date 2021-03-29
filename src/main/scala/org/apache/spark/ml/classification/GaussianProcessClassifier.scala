@@ -9,6 +9,7 @@ import org.apache.spark.ml.commons.kernel.Kernel
 import org.apache.spark.ml.feature.LabeledPoint
 import org.apache.spark.ml.linalg.{DenseVector, SparseVector, Vector, Vectors}
 import org.apache.spark.ml.param.ParamMap
+import org.apache.spark.ml.util.Instrumentation.instrumented
 import org.apache.spark.ml.util.{Identifiable, Instrumentation}
 import org.apache.spark.rdd.RDD
 import org.apache.spark.sql.Dataset
@@ -41,12 +42,10 @@ import org.apache.spark.sql.Dataset
 class GaussianProcessClassifier(override val uid: String)
   extends ProbabilisticClassifier[Vector, GaussianProcessClassifier, GaussianProcessClassificationModel]
     with GaussianProcessParams
-    with GaussianProcessCommons[Vector, GaussianProcessClassifier, GaussianProcessClassificationModel]
-    with Logging {
+    with GaussianProcessCommons[Vector, GaussianProcessClassifier, GaussianProcessClassificationModel] {
   def this() = this(Identifiable.randomUID("gaussProcessClass"))
 
-  override protected def train(dataset: Dataset[_]): GaussianProcessClassificationModel = {
-    val instr = Instrumentation.create(this, dataset)
+  override protected def train(dataset: Dataset[_]): GaussianProcessClassificationModel = instrumented { instr =>
     val points: RDD[LabeledPoint] = getPoints(dataset).cache()
     assertLabelsAre01(points)
 
@@ -151,7 +150,7 @@ class GaussianProcessClassificationModel private[classification](override val ui
 
   override def numClasses: Int = 2
 
-  override protected def predictRaw(features: Vector): Vector = {
+  override def predictRaw(features: Vector): Vector = {
     val (f, _) = gaussianProjectedProcessRawPredictor.predict(features)
     Vectors.dense(-f, f)
   }

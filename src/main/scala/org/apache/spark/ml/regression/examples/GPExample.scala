@@ -8,7 +8,7 @@ import org.apache.spark.sql.{DataFrame, SparkSession}
 trait GPExample {
   def name : String
 
-  val spark = SparkSession.builder().appName(name).master("local[4]").getOrCreate()
+  val spark = SparkSession.builder().appName(name).master("local[10]").getOrCreate()
 
   /*
    * It takes `gp`, runs 10-fold cross-validation on `instances` and returns the rmse

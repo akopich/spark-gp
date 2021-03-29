@@ -63,10 +63,10 @@ private[ml] trait GaussianProcessCommons[F, E <: Predictor[F, E, M], M <: Predic
     * @tparam T for GPR it's (y, kernel), for GPC it's (y, f, kernel)
     * @return the optimal hyperparameters estimates
     */
-  protected def optimizeHypers[T](instr: Instrumentation[E],
+  protected def optimizeHypers[T](instr: Instrumentation,
                                   expertValuesAndKernels: RDD[T],
                                   likelihoodAndGradient: (T, BDV[Double]) => (Double, BDV[Double])) = {
-    instr.log("Optimising the kernel hyperparameters")
+    instr.logInfo("Optimising the kernel hyperparameters")
 
     val f = new DiffFunctionMemoized[BDV[Double]] with Serializable {
       override protected def calculateNoMemory(x: BDV[Double]): (Double, BDV[Double]) = {
@@ -86,7 +86,7 @@ private[ml] trait GaussianProcessCommons[F, E <: Predictor[F, E, M], M <: Predic
     val optimalHyperparameters = solver.minimize(f, x0)
 
     val optimalKernel = getKernel().setHyperparameters(optimalHyperparameters)
-    instr.log("Optimal kernel: " + optimalKernel)
+    instr.logInfo("Optimal kernel: " + optimalKernel)
 
     optimalHyperparameters
   }
@@ -99,13 +99,13 @@ private[ml] trait GaussianProcessCommons[F, E <: Predictor[F, E, M], M <: Predic
     * @param optimalHyperparameters
     * @return the model
     */
-  protected def produceModel(instr: Instrumentation[E],
+  protected def produceModel(instr: Instrumentation,
                              points: RDD[LabeledPoint],
                              expertLabelsAndKernels: RDD[(BDV[Double], Kernel)],
                              optimalHyperparameters: BDV[Double]) = {
     val rawPredictor = projectedProcess(expertLabelsAndKernels, points, optimalHyperparameters)
     val model = createModel(uid, rawPredictor)
-    instr.logSuccess(model)
+    instr.logSuccess()
     model
   }
 

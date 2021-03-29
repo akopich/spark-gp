@@ -16,6 +16,7 @@ object Airfoil extends App with GPExample with Scaling {
   val scaled = scale(airfoil).toDF
 
   val gp = new GaussianProcessRegression()
+    .setDatasetSizeForExpert(100)
     .setActiveSetSize(1000)
     .setSigma2(1e-4)
     .setKernel(() => 1 * new ARDRBFKernel(5) + 1.const * new EyeKernel)

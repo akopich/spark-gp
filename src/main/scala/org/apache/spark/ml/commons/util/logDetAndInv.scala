@@ -1,5 +1,6 @@
 package org.apache.spark.ml.commons.util
 
+import breeze.linalg.LU.DenseLU
 import breeze.linalg.{LU, MatrixSingularException, DenseMatrix => BDM, DenseVector => BDV}
 import com.github.fommil.netlib.LAPACK.{getInstance => lapack}
 import org.netlib.util.intW
@@ -55,7 +56,7 @@ private[ml] object logDetAndInv {
     * @return (sign, logdet, inverse)
     */
   def apply(X: BDM[Double]) = {
-    val (m: BDM[Double], ipiv: Array[Int]) = LU(X)
+    val (m: BDM[Double], ipiv: Array[Int]) = LU.primitive(X)
     val (sign: Double, logdet: Double) = LU2logdet(m, ipiv)
     val inverse = LU2inv(m, ipiv)
     (sign, logdet, inverse)

@@ -8,6 +8,7 @@ import org.apache.spark.ml.commons.util._
 import org.apache.spark.ml.feature.LabeledPoint
 import org.apache.spark.ml.linalg.Vector
 import org.apache.spark.ml.param.ParamMap
+import org.apache.spark.ml.util.Instrumentation.instrumented
 import org.apache.spark.ml.util.{Identifiable, Instrumentation}
 import org.apache.spark.rdd.RDD
 import org.apache.spark.sql.Dataset
@@ -35,13 +36,11 @@ import org.apache.spark.sql.Dataset
 class GaussianProcessRegression(override val uid: String)
   extends Regressor[Vector, GaussianProcessRegression, GaussianProcessRegressionModel]
     with GaussianProcessParams
-    with GaussianProcessCommons[Vector, GaussianProcessRegression, GaussianProcessRegressionModel] with Logging {
+    with GaussianProcessCommons[Vector, GaussianProcessRegression, GaussianProcessRegressionModel] {
 
   def this() = this(Identifiable.randomUID("gaussProcessReg"))
 
-  override protected def train(dataset: Dataset[_]): GaussianProcessRegressionModel = {
-    val instr = Instrumentation.create(this, dataset)
-
+  override protected def train(dataset: Dataset[_]): GaussianProcessRegressionModel = instrumented { instr =>
     val points: RDD[LabeledPoint] = getPoints(dataset).cache()
 
     val expertLabelsAndKernels: RDD[(BDV[Double], Kernel)] = getExpertLabelsAndKernels(points).cache()
@@ -50,8 +49,7 @@ class GaussianProcessRegression(override val uid: String)
 
     expertLabelsAndKernels.foreach(_._2.setHyperparameters(optimalHyperparameters))
 
-    produceModel(instr,
-      points, expertLabelsAndKernels, optimalHyperparameters)
+    produceModel(instr, points, expertLabelsAndKernels, optimalHyperparameters)
   }
 
   private def likelihoodAndGradient(yAndK : (BDV[Double], Kernel), x : BDV[Double]) = {
@@ -78,7 +76,7 @@ class GaussianProcessRegressionModel private[regression](override val uid: Strin
           private val gaussianProjectedProcessRawPredictor: GaussianProjectedProcessRawPredictor)
   extends RegressionModel[Vector, GaussianProcessRegressionModel] {
 
-  override protected def predict(features: Vector): Double = {
+  override def predict(features: Vector): Double = {
     gaussianProjectedProcessRawPredictor.predict(features)._1
   }
 
